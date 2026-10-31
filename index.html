@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#06070a" />
+  <title>NCFA College Track & Field 27</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game-canvas" aria-label="NCFA College Track & Field 27 3D game"></canvas>
+
+    <section id="boot-screen" class="screen screen--active">
+      <div class="boot-mark">NCFA</div>
+      <h1>COLLEGE TRACK &amp; FIELD <span>27</span></h1>
+      <p>Every second builds a legacy.</p>
+      <button id="enter-game" class="primary-btn">ENTER GAME</button>
+      <div class="boot-footer">A fictional collegiate athletics universe.</div>
+    </section>
+
+    <section id="main-menu" class="screen">
+      <div class="menu-topline">
+        <div>
+          <div class="eyebrow">NCFA</div>
+          <h2>COLLEGE TRACK &amp; FIELD 27</h2>
+        </div>
+        <div class="season-pill">2027 SEASON</div>
+      </div>
+
+      <div class="menu-grid">
+        <button class="mode-card mode-card--hero" data-mode="career">
+          <span class="mode-kicker">LIVE THE JOURNEY</span>
+          <strong>CAREER</strong>
+          <small>Create an athlete. Earn offers. Chase titles.</small>
+        </button>
+        <button class="mode-card" data-mode="dynasty">
+          <span class="mode-kicker">BUILD A PROGRAM</span>
+          <strong>DYNASTY</strong>
+          <small>Recruit, develop, score and win championships.</small>
+        </button>
+        <button class="mode-card" data-mode="quick">
+          <span class="mode-kicker">RACE NOW</span>
+          <strong>QUICK MEET</strong>
+          <small>Jump straight into competition.</small>
+        </button>
+        <button class="mode-card" data-mode="championship">
+          <span class="mode-kicker">SURVIVE &amp; ADVANCE</span>
+          <strong>CHAMPIONSHIP</strong>
+          <small>Conference to national final.</small>
+        </button>
+      </div>
+    </section>
+
+    <section id="career-select" class="screen">
+      <div class="panel panel--wide">
+        <button class="text-btn back-btn" data-back="menu">← MAIN MENU</button>
+        <div class="eyebrow">CREATE YOUR LEGACY</div>
+        <h2>Choose your career path</h2>
+        <p class="muted">Your event group changes training, attributes, season goals and recruiting.</p>
+
+        <div class="career-grid">
+          <button class="career-card" data-career="Sprints" data-events="60m • 100m • 200m • 400m • Hurdles • Relays">
+            <span>⚡</span><strong>SPRINT CAREER</strong><small>Explosive power, speed endurance and relay pressure.</small>
+          </button>
+          <button class="career-card" data-career="Distance" data-events="XC • 800m • 1500m • Mile • 3K • 5K • 10K">
+            <span>◉</span><strong>DISTANCE CAREER</strong><small>Race tactics, aerobic development and championship kicks.</small>
+          </button>
+          <button class="career-card" data-career="Jumps" data-events="High Jump • Long Jump • Triple Jump • Pole Vault">
+            <span>↗</span><strong>JUMPS CAREER</strong><small>Approach rhythm, technique and explosive precision.</small>
+          </button>
+          <button class="career-card" data-career="Throws" data-events="Shot • Discus • Hammer • Javelin • Weight">
+            <span>●</span><strong>THROWS CAREER</strong><small>Strength, technique and championship-series consistency.</small>
+          </button>
+          <button class="career-card" data-career="Combined Events" data-events="Pentathlon • Heptathlon • Decathlon">
+            <span>★</span><strong>COMBINED EVENTS</strong><small>Master every discipline and manage fatigue across days.</small>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="career-hub" class="screen">
+      <div class="hub-shell">
+        <header class="hub-header">
+          <div>
+            <div class="eyebrow">CAREER • FRESHMAN</div>
+            <h2 id="hub-athlete">JORDAN CARTER</h2>
+            <p id="hub-event-group" class="muted">DISTANCE • 800m / 1500m</p>
+          </div>
+          <div class="overall-box"><span>OVR</span><strong id="overall-rating">78</strong></div>
+        </header>
+
+        <div class="hub-grid">
+          <div class="hub-card hub-card--schedule">
+            <div class="card-label">TODAY • SATURDAY</div>
+            <h3>NCFA Season Opener</h3>
+            <p>Men's 800m • Heat 1 • 8:42 PM</p>
+            <div class="venue-line">Hawthorne University Track Stadium</div>
+            <button id="race-now" class="primary-btn">RACE 800m</button>
+          </div>
+
+          <div class="hub-card">
+            <div class="card-label">ATHLETE STATUS</div>
+            <div class="stat-row"><span>Energy</span><strong id="energy-stat">94%</strong></div>
+            <div class="meter"><i style="width:94%"></i></div>
+            <div class="stat-row"><span>Coach Trust</span><strong>62%</strong></div>
+            <div class="meter"><i style="width:62%"></i></div>
+            <div class="stat-row"><span>GPA</span><strong>3.42</strong></div>
+          </div>
+
+          <div class="hub-card">
+            <div class="card-label">SEASON BEST</div>
+            <div class="big-time">1:52.84</div>
+            <p class="muted">800 metres</p>
+            <div class="mini-line"><span>PR</span><strong>1:51.92</strong></div>
+            <div class="mini-line"><span>NCFA Rank</span><strong>#38</strong></div>
+          </div>
+
+          <div class="hub-card">
+            <div class="card-label">NEXT UP</div>
+            <ul class="agenda">
+              <li><span>MON</span> Recovery + lift</li>
+              <li><span>TUE</span> 5 × 300m race rhythm</li>
+              <li><span>THU</span> Pre-meet</li>
+              <li><span>SAT</span> Capital Invitational</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="race-hud" class="screen race-screen">
+      <div class="race-topbar">
+        <div><span class="hud-label">MEN'S 800m</span><strong id="race-clock">0:00.00</strong></div>
+        <div><span class="hud-label">PLACE</span><strong id="place-readout">1 / 8</strong></div>
+        <div><span class="hud-label">DISTANCE</span><strong id="distance-readout">0 / 800m</strong></div>
+      </div>
+
+      <div class="race-bottom">
+        <div class="effort-wrap">
+          <div class="hud-label">EFFORT</div>
+          <div class="effort-meter"><i id="effort-fill"></i><b id="effort-marker"></b></div>
+          <div class="effort-labels"><span>RELAX</span><span>RACE</span><span>KICK</span></div>
+        </div>
+        <div class="controls-card">
+          <strong>CONTROLS</strong>
+          <span>W / ↑ increase effort</span>
+          <span>S / ↓ relax</span>
+          <span>A / D move out / in</span>
+          <span>SPACE surge</span>
+        </div>
+      </div>
+
+      <div id="split-toast" class="split-toast">400m • 56.21</div>
+    </section>
+
+    <section id="results-screen" class="screen">
+      <div class="panel results-panel">
+        <div class="eyebrow">OFFICIAL RESULTS</div>
+        <h2>MEN'S 800m • FINAL</h2>
+        <div id="results-list" class="results-list"></div>
+        <div class="result-actions">
+          <button id="return-hub" class="primary-btn">CONTINUE CAREER</button>
+          <button id="race-again" class="secondary-btn">RACE AGAIN</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="./src/game.js"></script>
+</body>
+</html>
