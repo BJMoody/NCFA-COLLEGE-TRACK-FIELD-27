@@ -71,17 +71,25 @@ function createCrowd(world) {
   const dummy = new THREE.Object3D();
   const colors = [0xf1c40f, 0xf1f1f1, 0x334f7c, 0x812f36, 0x3e7649, 0x151a20, 0xd98032];
   const skin = [0x5f3827, 0x81543a, 0xa96f4f, 0xc88c68, 0xe0b08c];
+  const poses = [];
   let index = 0;
   for (const side of [-1, 1]) {
     for (let row = 0; row < 10 && index < count; row++) {
       const rowCount = 46;
       for (let i = 0; i < rowCount && index < count; i++, index++) {
-        const x = -67 + i * 3.0 + (Math.random() - 0.5) * 0.45;
-        const z = side * (59 + row * 2.25);
-        const y = 2.0 + row * 1.42 + Math.random() * 0.18;
-        dummy.position.set(x, y, z);
-        dummy.rotation.y = side < 0 ? 0 : Math.PI;
-        dummy.scale.setScalar(0.92 + Math.random() * 0.16);
+        const pose = {
+          x: -67 + i * 3.0 + (Math.random() - 0.5) * 0.45,
+          z: side * (59 + row * 2.25),
+          y: 2.0 + row * 1.42 + Math.random() * 0.18,
+          side,
+          scale: 0.92 + Math.random() * 0.16,
+          phase: Math.random() * Math.PI * 2,
+          energy: 0.65 + Math.random() * 0.35
+        };
+        poses.push(pose);
+        dummy.position.set(pose.x, pose.y, pose.z);
+        dummy.rotation.set(0, side < 0 ? 0 : Math.PI, 0);
+        dummy.scale.setScalar(pose.scale);
         dummy.updateMatrix();
         bodies.setMatrixAt(index, dummy.matrix);
         bodies.setColorAt(index, new THREE.Color(colors[(Math.random() * colors.length) | 0]));
@@ -94,7 +102,57 @@ function createCrowd(world) {
   }
   bodies.castShadow = false;
   heads.castShadow = false;
+  bodies.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  heads.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   world.add(bodies, heads);
+  return { bodies, heads, poses, dummy };
+}
+
+export function updateCrowdMood(crowd, mood, time) {
+  if (!crowd) return;
+  const { bodies, heads, poses, dummy } = crowd;
+  for (let i = 0; i < poses.length; i++) {
+    const p = poses[i];
+    const facing = p.side < 0 ? 0 : Math.PI;
+    let bodyY = p.y;
+    let headY = p.y + 0.52;
+    let tiltX = 0;
+    let tiltZ = 0;
+    let scaleY = p.scale;
+
+    if (mood === 'win') {
+      const bounce = Math.max(0, Math.sin(time * (8.5 + p.energy * 2.2) + p.phase));
+      bodyY += bounce * (0.36 + p.energy * 0.34);
+      headY = bodyY + 0.54;
+      tiltZ = Math.sin(time * 6.3 + p.phase) * 0.18;
+      scaleY = p.scale * (1 + bounce * 0.08);
+    } else if (mood === 'mid') {
+      const small = Math.sin(time * 1.4 + p.phase) * 0.025;
+      bodyY += small;
+      headY += small;
+      tiltZ = small * 0.35;
+    } else if (mood === 'loss') {
+      bodyY -= 0.18 + p.energy * 0.08;
+      headY = bodyY + 0.45;
+      tiltX = p.side * 0.08;
+      tiltZ = -0.10 - p.energy * 0.05;
+      scaleY = p.scale * 0.92;
+    }
+
+    dummy.position.set(p.x, bodyY, p.z);
+    dummy.rotation.set(tiltX, facing, tiltZ);
+    dummy.scale.set(p.scale, scaleY, p.scale);
+    dummy.updateMatrix();
+    bodies.setMatrixAt(i, dummy.matrix);
+
+    dummy.position.set(p.x, headY, p.z);
+    dummy.rotation.set(tiltX * 1.3, facing, tiltZ * 0.7);
+    dummy.scale.setScalar(p.scale);
+    dummy.updateMatrix();
+    heads.setMatrixAt(i, dummy.matrix);
+  }
+  bodies.instanceMatrix.needsUpdate = true;
+  heads.instanceMatrix.needsUpdate = true;
 }
 
 function addStands(world) {
@@ -187,10 +245,11 @@ export function createWorld(scene) {
   world.add(infield);
 
   addStands(world);
-  createCrowd(world);
+  const crowd = createCrowd(world);
   addScoreboard(world);
   addLights(world);
   addStartFinish(world);
 
+  world.userData.crowd = crowd;
   return world;
 }
