@@ -156,12 +156,10 @@ async function loadGame() {
 
   try {
     await import('./perf-v10.js');
-    // Unique v21 path prevents stale cached prerace code from surviving deploys.
-    // It owns prerace camera, runner staging, stadium dressing, and the starter.
     await import('./prerace-v21.js');
     window.__NCFA_PRERACE_V21_READY = true;
-    await import('./audio-safety-v16.js');
-    await import('./start-controls-v16.js');
+    await import('./audio-safety-v17.js');
+    await import('./start-controls-v17.js');
     await import('./game.js');
     await import('./pace-choice.js');
 
