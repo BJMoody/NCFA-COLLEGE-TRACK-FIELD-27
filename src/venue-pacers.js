@@ -1,10 +1,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
-import { EVENTS, EVENT_STARTS } from './data.js';
+import { EVENTS } from './data.js';
 import { createAthlete, animateAthlete } from './athlete.js';
-import { stadiumPoint, INNER_RADIUS, LANE_WIDTH } from './world.js';
+import { stadiumPoint, eventStartBase, INNER_RADIUS, LANE_WIDTH } from './world.js';
 
-// Capture the world group used by game.js when the normal race athletes are attached.
-// This module no longer moves stadium geometry or race athletes.
 let athleteParent = null;
 const originalAdd = THREE.Object3D.prototype.add;
 if (!THREE.Object3D.prototype.__ncfaPacerCapture) {
@@ -30,17 +28,14 @@ let raceSerial = 0;
 function raceEvent() {
   return document.querySelector('#race-event-label')?.textContent?.trim() || '';
 }
-
 function eventDistance(name) {
   return Number(EVENTS[name]?.distance || Number(name.replace(/\D/g, '')) || 0);
 }
-
 function assignmentTarget() {
   const text = document.querySelector('#pace-assignment')?.textContent || '';
   const match = text.match(/(?:roughly|approximately)\s+(\d+)m/i);
   return match ? Number(match[1]) : null;
 }
-
 function hasPlayerPaceJob() {
   return window.__NCFA_PLAYER_ROLE === 'pace' && /PACER|pacing job|control the field/i.test(document.querySelector('#pace-assignment')?.textContent || '');
 }
@@ -81,7 +76,7 @@ function createPacer(index, ev, distance, target) {
   const speed = average * (1.00 + index * 0.003);
   const lane = 1.18 + index * 0.30;
   const radius = INNER_RADIUS + (lane - 0.5) * LANE_WIDTH;
-  const baseCourse = EVENT_STARTS[ev]?.base ?? 0;
+  const baseCourse = eventStartBase(ev);
 
   return {
     serial: raceSerial,
@@ -111,7 +106,6 @@ function startAiPacers() {
   activePacers.forEach((p) => p.mesh?.parent?.remove(p.mesh));
   activePacers = [];
 
-  // AI rabbits are independent of the player's role. Sometimes there is no rabbit at all.
   const chance = distance >= 3000 ? 0.50 : distance >= 1500 ? 0.38 : 0.30;
   if (Math.random() >= chance) {
     addPacerBanner('NO AI PACER ASSIGNED • OPEN RACE');
