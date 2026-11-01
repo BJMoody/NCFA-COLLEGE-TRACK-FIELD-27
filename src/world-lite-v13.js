@@ -1,32 +1,38 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
-import {
-  createWorld as createFastWorld,
-  STRAIGHT,
-  BASE_RADIUS,
-  LAP,
-  LANE_WIDTH,
-  INNER_RADIUS,
-  OUTER_RADIUS,
-  TRACK_Y,
-  CHUTE_Z,
-  FINISH_COURSE,
-  eventStartBase,
-  stadiumPoint
-} from './world-fast-v11.js';
+import { EVENTS } from './data.js';
 
-export {
-  STRAIGHT,
-  BASE_RADIUS,
-  LAP,
-  LANE_WIDTH,
-  INNER_RADIUS,
-  OUTER_RADIUS,
-  TRACK_Y,
-  CHUTE_Z,
-  FINISH_COURSE,
-  eventStartBase,
-  stadiumPoint
-};
+export const STRAIGHT = 84.39;
+export const BASE_RADIUS = 36.80;
+export const LAP = 2 * STRAIGHT + 2 * Math.PI * BASE_RADIUS;
+export const LANE_WIDTH = 1.22;
+export const INNER_RADIUS = BASE_RADIUS - 1.7;
+export const OUTER_RADIUS = INNER_RADIUS + LANE_WIDTH * 8.6;
+export const TRACK_Y = 0.08;
+export const CHUTE_Z = -(OUTER_RADIUS + 5.4);
+export const FINISH_COURSE = STRAIGHT;
+
+const modLap = (value) => ((value % LAP) + LAP) % LAP;
+
+export function eventStartBase(eventName) {
+  const distance = Number(EVENTS[eventName]?.distance || 0);
+  return modLap(FINISH_COURSE - distance);
+}
+
+export function stadiumPoint(metres, radius = BASE_RADIUS) {
+  let d = modLap(metres);
+  const curve = Math.PI * BASE_RADIUS;
+  if (d < STRAIGHT) return new THREE.Vector3(-STRAIGHT / 2 + d, TRACK_Y, -radius);
+  d -= STRAIGHT;
+  if (d < curve) {
+    const a = -Math.PI / 2 + d / BASE_RADIUS;
+    return new THREE.Vector3(STRAIGHT / 2 + Math.cos(a) * radius, TRACK_Y, Math.sin(a) * radius);
+  }
+  d -= curve;
+  if (d < STRAIGHT) return new THREE.Vector3(STRAIGHT / 2 - d, TRACK_Y, radius);
+  d -= STRAIGHT;
+  const a = Math.PI / 2 + d / BASE_RADIUS;
+  return new THREE.Vector3(-STRAIGHT / 2 + Math.cos(a) * radius, TRACK_Y, Math.sin(a) * radius);
+}
 
 function raceOrFieldVisible() {
   return Boolean(
@@ -51,18 +57,30 @@ export function createWorld(scene, venue) {
   scene.add(athleteGroup);
 
   let built = null;
+  let buildPromise = null;
   let disposed = false;
   let pendingTexture = null;
   let pendingClock = ['0:00.00', 'NCFA'];
   let pendingReaction = 'idle';
+  let latestTime = 0;
 
-  function ensureBuilt() {
-    if (disposed || built || !raceOrFieldVisible()) return built;
-    built = createFastWorld(scene, venue);
-    if (pendingTexture) built.setBroadcastTexture?.(pendingTexture);
-    built.setBroadcastClock?.(...pendingClock);
-    built.setCrowdReaction?.(pendingReaction);
-    return built;
+  function beginBuild() {
+    if (disposed || built || buildPromise || !raceOrFieldVisible()) return;
+    buildPromise = import('./world-fast-v11.js')
+      .then(({ createWorld: createFastWorld }) => {
+        if (disposed) return null;
+        built = createFastWorld(scene, venue);
+        if (pendingTexture) built.setBroadcastTexture?.(pendingTexture);
+        built.setBroadcastClock?.(...pendingClock);
+        built.setCrowdReaction?.(pendingReaction);
+        built.update?.(latestTime);
+        return built;
+      })
+      .catch((error) => {
+        console.error('NCFA stadium failed to load', error);
+        buildPromise = null;
+        return null;
+      });
   }
 
   return {
@@ -81,7 +99,9 @@ export function createWorld(scene, venue) {
       built?.setCrowdReaction?.(reaction);
     },
     update(time) {
-      ensureBuilt()?.update?.(time);
+      latestTime = time;
+      beginBuild();
+      built?.update?.(time);
     },
     dispose() {
       if (disposed) return;
