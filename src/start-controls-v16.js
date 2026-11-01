@@ -5,6 +5,7 @@ let emitting = false;
 let phaseStartedAt = performance.now();
 let lastPhase = 'idle';
 let failSafeUsed = false;
+let autoCompletingLegacyWalk = false;
 
 function phase() {
   return window.__NCFA_RACE_PHASE || 'idle';
@@ -33,6 +34,25 @@ window.addEventListener('keydown', (event) => {
   }
 }, true);
 
+function finishLegacyPreCommandWalk() {
+  if (autoCompletingLegacyWalk) return;
+  autoCompletingLegacyWalk = true;
+
+  // The old core asked the player to walk before "On your marks". Hide that
+  // obsolete prompt and satisfy it internally. presentation-v17 keeps every
+  // runner visibly waiting behind the mark until the actual command is heard.
+  document.querySelector('#interactive-start')?.classList.remove('show');
+
+  let count = 0;
+  const step = () => {
+    emit(count % 2 === 0 ? 'KeyQ' : 'KeyP', count % 2 === 0 ? 'q' : 'p');
+    count += 1;
+    if (count < 5) setTimeout(step, 28);
+    else autoCompletingLegacyWalk = false;
+  };
+  step();
+}
+
 function tick() {
   const current = phase();
   if (current !== lastPhase) {
@@ -42,6 +62,14 @@ function tick() {
   }
 
   const elapsed = performance.now() - phaseStartedAt;
+  const starterCommand = document.querySelector('#starter-command')?.textContent?.trim().toUpperCase() || '';
+
+  // Never make the player walk to the mark BEFORE the command. The visual walk
+  // is now performed by presentation-v17 immediately after "On your marks".
+  if (current === 'walk' && starterCommand !== 'ON YOUR MARKS') {
+    finishLegacyPreCommandWalk();
+    return;
+  }
 
   if (!failSafeUsed && current === 'walk' && elapsed > 12000) {
     failSafeUsed = true;
@@ -60,4 +88,4 @@ function tick() {
   }
 }
 
-setInterval(tick, 250);
+setInterval(tick, 100);
