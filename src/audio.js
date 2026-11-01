@@ -14,9 +14,11 @@ export class GameAudio {
     this.cache = new Map();
     this.speechChain = Promise.resolve();
     this.activeSpeech = null;
+    this.activeSpeechPath = null;
     this.ambient = null;
     this.footsteps = null;
-    this.volumes = { speech: 0.92, crowd: 0.48, sfx: 0.78, footsteps: 0.24 };
+    this.crowdLevel = 1;
+    this.volumes = { speech: 1.0, crowd: 0.22, sfx: 0.70, footsteps: 0.17 };
   }
 
   setEnabled(enabled) {
@@ -45,12 +47,25 @@ export class GameAudio {
     return audio && Number.isFinite(audio.duration) ? audio.duration : 0;
   }
 
+  speechActive(prefix = null) {
+    if (!this.activeSpeech || !this.activeSpeechPath) return false;
+    return prefix ? this.activeSpeechPath.startsWith(prefix) : true;
+  }
+
+  applyCrowdMix() {
+    if (!this.ambient) return;
+    const speechDuck = this.activeSpeech ? 0.24 : 1;
+    this.ambient.volume = Math.max(0.025, Math.min(0.34, this.volumes.crowd * this.crowdLevel * speechDuck));
+  }
+
   async play(relativePath, { volume = 1, loop = false, wait = false, restart = true } = {}) {
     if (!this.enabled) return { played: false, duration: 0 };
     const template = await this.load(relativePath);
     if (!template) return { played: false, duration: 0 };
     const audio = loop ? template : template.cloneNode(true);
-    audio.volume = Math.max(0, Math.min(1, volume));
+    let mixedVolume = volume;
+    if (this.activeSpeech && relativePath.includes('crowd_')) mixedVolume *= 0.30;
+    audio.volume = Math.max(0, Math.min(1, mixedVolume));
     audio.loop = loop;
     if (restart) audio.currentTime = 0;
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
@@ -76,17 +91,28 @@ export class GameAudio {
       const clip = audio.cloneNode(true);
       clip.volume = volume;
       this.activeSpeech = clip;
+      this.activeSpeechPath = relativePath;
+      this.applyCrowdMix();
+      window.dispatchEvent(new CustomEvent('ncfa:speechstart', { detail: { path: relativePath, duration: Number.isFinite(clip.duration) ? clip.duration : 0 } }));
       try {
         await clip.play();
       } catch {
         this.activeSpeech = null;
+        this.activeSpeechPath = null;
+        this.applyCrowdMix();
+        window.dispatchEvent(new CustomEvent('ncfa:speechend', { detail: { path: relativePath } }));
         return;
       }
       await new Promise((resolve) => {
         clip.addEventListener('ended', resolve, { once: true });
         clip.addEventListener('error', resolve, { once: true });
       });
-      if (this.activeSpeech === clip) this.activeSpeech = null;
+      if (this.activeSpeech === clip) {
+        this.activeSpeech = null;
+        this.activeSpeechPath = null;
+      }
+      this.applyCrowdMix();
+      window.dispatchEvent(new CustomEvent('ncfa:speechend', { detail: { path: relativePath } }));
     });
     return this.speechChain;
   }
@@ -99,10 +125,14 @@ export class GameAudio {
   stopSpeech() {
     if (this.activeSpeech) {
       const clip = this.activeSpeech;
+      const path = this.activeSpeechPath;
       clip.pause();
       clip.currentTime = 0;
       clip.dispatchEvent(new Event('ended'));
       this.activeSpeech = null;
+      this.activeSpeechPath = null;
+      this.applyCrowdMix();
+      if (path) window.dispatchEvent(new CustomEvent('ncfa:speechend', { detail: { path } }));
     }
     this.speechChain = Promise.resolve();
   }
@@ -110,12 +140,15 @@ export class GameAudio {
   async startCrowd() {
     if (this.ambient || !this.enabled) return;
     const result = await this.play('sfx/crowd_stadium_loop_01.mp3', { volume: this.volumes.crowd, loop: true });
-    if (result.audio) this.ambient = result.audio;
+    if (result.audio) {
+      this.ambient = result.audio;
+      this.applyCrowdMix();
+    }
   }
 
   setCrowdLevel(level) {
-    if (!this.ambient) return;
-    this.ambient.volume = Math.max(0.08, Math.min(0.8, this.volumes.crowd * level));
+    this.crowdLevel = Math.max(0.25, Math.min(1.35, level));
+    this.applyCrowdMix();
   }
 
   async startFootsteps() {
@@ -140,12 +173,12 @@ export class GameAudio {
   }
 
   async bell() {
-    return this.play('sfx/final_lap_bell_01.mp3', { volume: 0.68, wait: false });
+    return this.play('sfx/final_lap_bell_01.mp3', { volume: 0.56, wait: false });
   }
 
   async crowdReaction(place) {
     const file = place === 1 ? 'sfx/crowd_win_roar_01.mp3' : place <= 5 ? 'sfx/crowd_mid_reaction_01.mp3' : 'sfx/crowd_loss_reaction_01.mp3';
-    return this.play(file, { volume: place === 1 ? 0.82 : 0.56, wait: false });
+    return this.play(file, { volume: place === 1 ? 0.44 : 0.28, wait: false });
   }
 
   async starterSequence({ blocks = false, startFormat = 'Waterfall', onCommand, onGun }) {
