@@ -7,7 +7,9 @@ let ready = false;
 let enhancementIndex = 0;
 let enhancementsStarted = false;
 let raceControlsReady = false;
+let raceControlsAttempted = false;
 let startingEvent = false;
+window.__NCFA_CONTROL_V9_READY = false;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
@@ -35,11 +37,17 @@ const enhancementModules = [
 ];
 
 async function loadEnhancement(path) {
+  if (path === './control-v9.js') raceControlsAttempted = true;
   try {
     await import(path);
-    if (path === './control-v9.js') raceControlsReady = true;
+    if (path === './control-v9.js') {
+      raceControlsReady = true;
+      window.__NCFA_CONTROL_V9_READY = true;
+    }
+    return true;
   } catch (error) {
     console.warn(`Optional NCFA module failed softly: ${path}`, error);
+    return false;
   }
 }
 
@@ -89,7 +97,7 @@ function installStartEventGuard() {
   if (!button) return;
 
   button.addEventListener('click', async (event) => {
-    if (startingEvent || raceControlsReady) return;
+    if (startingEvent || raceControlsReady || raceControlsAttempted) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -98,15 +106,14 @@ function installStartEventGuard() {
     button.disabled = true;
     button.textContent = 'PREPARING EVENT…';
 
-    // Q/E race controls are critical, not optional. Guarantee them before the
-    // core START EVENT handler is allowed to run.
     await loadEnhancement('./control-v9.js');
 
     button.disabled = false;
     button.textContent = oldText || 'START EVENT';
     startingEvent = false;
 
-    // Re-enter after this capture handler has released the original click.
+    // Whether the enhancement succeeded or not, do not retry forever. The
+    // minimal start-controls module provides a Q/E fallback.
     setTimeout(() => button.click(), 0);
   }, true);
 }
@@ -123,7 +130,6 @@ async function loadGame() {
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   try {
-    // These guards must exist before game.js creates renderer/audio/start state.
     await import('./perf-v10.js');
     await import('./audio-safety-v16.js');
     await import('./start-controls-v16.js');
@@ -157,4 +163,4 @@ enterButton?.addEventListener('click', (event) => {
 }, true);
 
 // Zero Three/WebGL work before ENTER. Setup screens remain HTML-only. START EVENT
-// now has hard guards against stalled audio and missing Q/E control modules.
+// has hard guards against stalled audio, missing controls, and retry deadlocks.
