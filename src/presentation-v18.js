@@ -99,6 +99,7 @@ function createOfficial() {
   g.add(clipboard);
 
   g.userData.rig = { torso, headRoot, mouth, leftShoulder, rightShoulder };
+  g.scale.setScalar(1.08);
   g.visible = false;
   return g;
 }
@@ -139,14 +140,29 @@ function applyMood(a, t) {
   }
 }
 
-function ensureOfficial(list) {
+function applyWalkPose(a, progress, t) {
+  if (progress <= 0 || progress >= 1) return;
+  const r = a.userData.rig;
+  if (!r) return;
+  const cycle = t * 7.2 + (a.userData.bibNumber || 1) * 0.4;
+  const swing = Math.sin(cycle) * 0.30;
+  if (r.leftLeg?.hip) r.leftLeg.hip.rotation.x = swing;
+  if (r.rightLeg?.hip) r.rightLeg.hip.rotation.x = -swing;
+  if (r.leftLeg?.knee) r.leftLeg.knee.rotation.x = Math.max(0, -Math.sin(cycle)) * 0.32;
+  if (r.rightLeg?.knee) r.rightLeg.knee.rotation.x = Math.max(0, Math.sin(cycle)) * 0.32;
+  if (r.leftArm?.shoulder) r.leftArm.shoulder.rotation.x = -swing * 0.8;
+  if (r.rightArm?.shoulder) r.rightArm.shoulder.rotation.x = swing * 0.8;
+  if (r.torso) r.torso.rotation.x = 0.035;
+}
+
+function ensureOfficial(scene, list) {
   if (!list.length) return;
   if (!official) official = createOfficial();
-  if (!official.parent && list[0].parent) list[0].parent.add(official);
+  if (!official.parent) scene.add(official);
   const center = centerOf(list);
   const f = forwardOf(list[0]);
   const side = sideOf(list[0]);
-  official.position.copy(center.clone().addScaledVector(f, -4.6).addScaledVector(side, 6.2));
+  official.position.copy(center.clone().addScaledVector(f, -4.3).addScaledVector(side, 5.8));
   official.position.y = 0.08;
   official.lookAt(center.x, 1.2, center.z);
   official.visible = true;
@@ -164,12 +180,28 @@ function animateOfficial(t) {
   r.mouth.scale.y = talking ? 0.70 + Math.abs(Math.sin(t * 10.0)) * 1.25 : 0.62;
 }
 
+function captureTrueMarks(list) {
+  for (const a of list) {
+    if (!a.userData.ncfaTrueStartMark) {
+      a.userData.ncfaTrueStartMark = a.position.clone();
+      a.userData.ncfaTrueStartForward = forwardOf(a).clone();
+    }
+  }
+}
+
+function clearTrueMarks() {
+  for (const a of trackedAthletes) {
+    delete a.userData.ncfaTrueStartMark;
+    delete a.userData.ncfaTrueStartForward;
+  }
+}
+
 function markProgress() {
   const command = starterCommand();
   const phase = window.__NCFA_RACE_PHASE || 'presentation';
   if (command === 'ON YOUR MARKS') {
     if (!onMarksAt) onMarksAt = performance.now();
-    const u = Math.max(0, Math.min(1, (performance.now() - onMarksAt) / 1500));
+    const u = Math.max(0, Math.min(1, (performance.now() - onMarksAt) / 1350));
     return u * u * (3 - 2 * u);
   }
   if (phase === 'ready' || phase === 'hold') return 1;
@@ -177,12 +209,16 @@ function markProgress() {
   return 0;
 }
 
-function moveRunners(list) {
+function moveRunners(list, t) {
+  captureTrueMarks(list);
   const progress = markProgress();
   for (const a of list) {
-    const mark = a.position.clone();
-    const wait = mark.clone().addScaledVector(forwardOf(a), -2.7);
-    a.position.copy(wait.lerp(mark, progress));
+    const mark = a.userData.ncfaTrueStartMark;
+    const forward = a.userData.ncfaTrueStartForward || forwardOf(a);
+    if (!mark) continue;
+    const wait = mark.clone().addScaledVector(forward, -2.7);
+    a.position.copy(wait.clone().lerp(mark, progress));
+    applyWalkPose(a, progress, t);
   }
 }
 
@@ -219,7 +255,7 @@ function officialShot(camera) {
   if (!official) return;
   const f = forwardOf(official);
   const s = sideOf(official);
-  setCamera(camera, official.position.clone().addScaledVector(f, -2.45).addScaledVector(s, 0.7).add(new THREE.Vector3(0, 1.68, 0)), official.position.clone().add(new THREE.Vector3(0, 1.42, 0)), 29);
+  setCamera(camera, official.position.clone().addScaledVector(f, 2.55).addScaledVector(s, 0.8).add(new THREE.Vector3(0, 1.62, 0)), official.position.clone().add(new THREE.Vector3(0, 1.42, 0)), 28);
 }
 
 function directCamera(camera, list) {
@@ -230,15 +266,16 @@ function directCamera(camera, list) {
 
   if (command === 'ON YOUR MARKS') {
     const age = onMarksAt ? (now - onMarksAt) / 1000 : 0;
-    if (age < 0.55) officialShot(camera);
-    else if (age < 1.15) lineupSide(camera, list);
+    if (age < 0.45) officialShot(camera);
+    else if (age < 1.05) lineupSide(camera, list);
     else behindStart(camera, list);
     return;
   }
 
   if (command === 'OFFICIAL INSTRUCTIONS' || command === 'SET' || officialSpeaking) {
-    if (Math.floor(t / 2.1) % 4 === 3) lineupWide(camera, list, t);
-    else officialShot(camera);
+    const cut = (t % 2.0);
+    if (cut < 1.55) officialShot(camera);
+    else lineupWide(camera, list, t);
     return;
   }
 
@@ -251,15 +288,15 @@ function directCamera(camera, list) {
     return;
   }
 
-  const cycle = t % 14.2;
-  if (cycle < 2.4) setCamera(camera, new THREE.Vector3(16 + Math.sin(t * 0.25) * 8, 13.5, 96), new THREE.Vector3(0, 1.8, 0), 45);
-  else if (cycle < 4.3) setCamera(camera, new THREE.Vector3(-42 + Math.sin(t * 0.35) * 10, 4.2, 47), new THREE.Vector3(-16 + Math.sin(t * 0.28) * 12, 3.6, 61), 31);
-  else if (cycle < 5.7) setCamera(camera, new THREE.Vector3(20, 14.5, 53), new THREE.Vector3(42, 17.5, 80), 30);
-  else if (cycle < 7.2) setCamera(camera, new THREE.Vector3(59, 4.7, -37 + Math.sin(t * 0.35) * 7), new THREE.Vector3(18, 1.2, 2), 40);
-  else if (cycle < 9.1) lineupWide(camera, list, t);
-  else if (cycle < 10.5) closeRunner(camera, list[0], 1);
-  else if (cycle < 11.9) closeRunner(camera, list[Math.min(2, list.length - 1)], 2);
-  else if (cycle < 13.2) closeRunner(camera, list[Math.min(5, list.length - 1)], 3);
+  // Compact 7.6s broadcast loop so every PA window shows several distinct shots.
+  const cycle = t % 7.6;
+  if (cycle < 1.15) setCamera(camera, new THREE.Vector3(18 + Math.sin(t * 0.35) * 6, 11.5, 92), new THREE.Vector3(0, 1.8, 0), 44);
+  else if (cycle < 2.20) setCamera(camera, new THREE.Vector3(-39 + Math.sin(t * 0.45) * 8, 4.2, 48), new THREE.Vector3(-15 + Math.sin(t * 0.35) * 8, 3.7, 61), 30);
+  else if (cycle < 3.05) setCamera(camera, new THREE.Vector3(20, 14.5, 53), new THREE.Vector3(42, 17.5, 80), 29);
+  else if (cycle < 3.95) setCamera(camera, new THREE.Vector3(58, 4.6, -36 + Math.sin(t * 0.45) * 5), new THREE.Vector3(18, 1.2, 2), 39);
+  else if (cycle < 5.05) lineupWide(camera, list, t);
+  else if (cycle < 6.00) closeRunner(camera, list[0], 1);
+  else if (cycle < 6.85) closeRunner(camera, list[Math.min(2, list.length - 1)], 2);
   else lineupSide(camera, list);
 }
 
@@ -271,13 +308,13 @@ function installSceneHook(scene) {
   scene.onBeforeRender = function ncfaPreraceBeforeRender(renderer, renderedScene, camera, renderTarget) {
     previous?.call?.(this, renderer, renderedScene, camera, renderTarget);
 
-    // Ignore the stadium's secondary broadcast-camera pass. The main gameplay
-    // camera starts at 54 degrees; the video-board camera is 42 degrees.
+    // Ignore the stadium's secondary broadcast-camera pass.
     if (!camera?.isPerspectiveCamera || Math.abs((camera.fov || 0) - 42) < 0.5) return;
 
     const prerace = isPrerace();
     if (!prerace) {
       if (official) official.visible = false;
+      if (wasPrerace) clearTrueMarks();
       wasPrerace = false;
       return;
     }
@@ -285,16 +322,17 @@ function installSceneHook(scene) {
     if (!wasPrerace) {
       introStart = performance.now();
       onMarksAt = 0;
+      clearTrueMarks();
     }
     wasPrerace = true;
 
     const list = activeAthletes();
     if (!list.length) return;
 
-    moveRunners(list);
     const t = performance.now() / 1000;
+    moveRunners(list, t);
     list.forEach((a) => applyMood(a, t));
-    ensureOfficial(list);
+    ensureOfficial(renderedScene, list);
     animateOfficial(t);
     directCamera(camera, list);
   };
