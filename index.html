@@ -79,13 +79,13 @@
     <div id="starter-overlay" class="starter-overlay"><div id="starter-command"></div><small id="starter-detail"></small></div>
     <div class="race-topbar"><div><span id="race-event-label" class="hud-label"></span><strong id="race-clock">0:00.00</strong></div><div><span class="hud-label">PLACE</span><strong id="place-readout">1 / 8</strong></div><div><span class="hud-label">DISTANCE</span><strong id="distance-readout">0m</strong></div><div><span class="hud-label">CADENCE</span><strong id="cadence-readout">0.0</strong></div></div>
     <div class="science-hud"><div class="science-title">SPORT SCIENCE LIVE</div><div class="science-row"><span>PCr reserve</span><b id="pcr-value">100%</b></div><div class="science-bar"><i id="pcr-bar"></i></div><div class="science-row"><span>Glycogen</span><b id="glycogen-value">100%</b></div><div class="science-bar"><i id="glycogen-bar"></i></div><div class="science-row"><span>Lactate proxy</span><b id="lactate-value">1.2</b></div><div class="science-bar hot"><i id="lactate-bar"></i></div><div class="science-row"><span>H+ / buffer stress</span><b id="buffer-value">0%</b></div><div class="science-bar hot"><i id="buffer-bar"></i></div></div>
-    <div class="race-bottom"><div class="tap-guide"><strong>ALTERNATE Q / P</strong><span>Faster taps = faster turnover. Find a sustainable rhythm.</span><div class="tap-lights"><i id="q-light">Q</i><i id="p-light">P</i></div></div><div class="controls-card"><span>A / D move out / in after break</span><span>SPACE surge</span></div></div>
+    <div class="race-bottom"><div class="tap-guide"><strong>ALTERNATE Q / E</strong><span>Drive with Q / E. Hold F to FLOAT, settle, then re-attack.</span><div class="tap-lights"><i id="q-light">Q</i><i id="p-light">E</i></div></div><div class="controls-card"><span>A / D move out / in after break</span><span>F hold FLOAT • SPACE surge</span></div></div>
     <div id="mobile-controls" class="mobile-controls"><button id="mobile-q">LEFT</button><button id="mobile-p">RIGHT</button><button id="mobile-out">OUT</button><button id="mobile-in">IN</button><button id="mobile-surge">SURGE</button></div>
     <div id="split-toast" class="split-toast"></div>
     <div id="pace-choice" class="pace-choice hidden"><strong>COACH: PACING JOB COMPLETE</strong><span>You were assigned to step off here.</span><button id="pace-drop">DROP OUT</button><button id="pace-continue">KEEP RACING</button></div>
   </section>
 
-  <section id="field-screen" class="screen field-screen"><div class="field-hud"><div class="eyebrow">FIELD EVENT</div><h2 id="field-event-name">LONG JUMP</h2><div class="field-meter"><i id="field-power"></i><b id="field-window"></b></div><p>Alternate Q / P to build rhythm and power, then press SPACE at the optimal moment.</p><button id="field-action" class="primary-btn">TAKEOFF</button><div id="field-attempts"></div></div><div id="field-mobile" class="mobile-controls"><button id="field-q">LEFT</button><button id="field-p">RIGHT</button><button id="field-mobile-action">ACTION</button></div></section>
+  <section id="field-screen" class="screen field-screen"><div class="field-hud"><div class="eyebrow">FIELD EVENT</div><h2 id="field-event-name">LONG JUMP</h2><div class="field-meter"><i id="field-power"></i><b id="field-window"></b></div><p>Alternate Q / E to build rhythm and power, then press SPACE at the optimal moment.</p><button id="field-action" class="primary-btn">TAKEOFF</button><div id="field-attempts"></div></div><div id="field-mobile" class="mobile-controls"><button id="field-q">LEFT</button><button id="field-p">RIGHT</button><button id="field-mobile-action">ACTION</button></div></section>
 
   <section id="finish-cinematic" class="screen cinematic-screen"><div class="cinematic-copy"><div class="eyebrow">FINISH</div><h2 id="finish-headline">WHAT A RUN</h2><p id="finish-subline"></p></div></section>
 
@@ -93,6 +93,7 @@
 </div>
 <script type="module" src="./src/venue-pacers.js"></script>
 <script type="module" src="./src/presentation.js"></script>
+<script type="module" src="./src/control-v9.js"></script>
 <script type="module" src="./src/game.js"></script>
 <script type="module" src="./src/mobile.js"></script>
 <script type="module" src="./src/mobile-boost.js"></script>
