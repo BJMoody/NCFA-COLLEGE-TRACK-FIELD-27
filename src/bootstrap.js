@@ -9,7 +9,7 @@ let enhancementsStarted = false;
 let criticalStartAttempted = false;
 let preparingCriticalStart = false;
 window.__NCFA_CONTROL_V9_READY = false;
-window.__NCFA_PRESENTATION_V17_READY = false;
+window.__NCFA_PRESENTATION_V18_READY = false;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
@@ -49,7 +49,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 const enhancementModules = [
   './control-v9.js',
-  './presentation-v17.js',
+  './presentation-v18.js',
   './venue-pacers.js',
   ...(navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches ? ['./mobile.js', './mobile-boost.js'] : []),
   './ui-v11.js'
@@ -59,7 +59,7 @@ async function loadEnhancement(path) {
   try {
     await import(path);
     if (path === './control-v9.js') window.__NCFA_CONTROL_V9_READY = true;
-    if (path === './presentation-v17.js') window.__NCFA_PRESENTATION_V17_READY = true;
+    if (path === './presentation-v18.js') window.__NCFA_PRESENTATION_V18_READY = true;
     return true;
   } catch (error) {
     console.warn(`Optional NCFA module failed softly: ${path}`, error);
@@ -92,11 +92,9 @@ async function beginRaceEnhancements() {
   if (enhancementsStarted) return;
   enhancementsStarted = true;
 
-  // The control map and broadcast director are part of the race itself, not
-  // optional polish. Load them first while the player is still on Meet Setup.
   await Promise.all([
     loadEnhancement('./control-v9.js'),
-    loadEnhancement('./presentation-v17.js')
+    loadEnhancement('./presentation-v18.js')
   ]);
   enhancementIndex = 2;
   scheduleEnhancementStep(0);
@@ -120,9 +118,7 @@ function installStartDiagnostics() {
   if (!button) return;
 
   button.addEventListener('click', async (event) => {
-    // First START EVENT press guarantees Q/E controls + the cinematic director.
-    // Only one guarded attempt is ever made; failure never creates a click loop.
-    if (!criticalStartAttempted && (!window.__NCFA_CONTROL_V9_READY || !window.__NCFA_PRESENTATION_V17_READY)) {
+    if (!criticalStartAttempted && (!window.__NCFA_CONTROL_V9_READY || !window.__NCFA_PRESENTATION_V18_READY)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (preparingCriticalStart) return;
@@ -133,7 +129,7 @@ function installStartDiagnostics() {
       button.textContent = 'PREPARING BROADCAST…';
       await Promise.all([
         loadEnhancement('./control-v9.js'),
-        loadEnhancement('./presentation-v17.js')
+        loadEnhancement('./presentation-v18.js')
       ]);
       button.disabled = false;
       button.textContent = oldText || 'START EVENT';
@@ -150,7 +146,7 @@ function installStartDiagnostics() {
       if (!stillSetup) return;
       reportRuntimeIssue(
         'START EVENT STALLED',
-        `phase=${window.__NCFA_RACE_PHASE || 'unknown'} | controls=${window.__NCFA_CONTROL_V9_READY ? 'ready' : 'fallback'} | presentation=${window.__NCFA_PRESENTATION_V17_READY ? 'ready' : 'fallback'} | main thread is responsive`
+        `phase=${window.__NCFA_RACE_PHASE || 'unknown'} | controls=${window.__NCFA_CONTROL_V9_READY ? 'ready' : 'fallback'} | presentation=${window.__NCFA_PRESENTATION_V18_READY ? 'ready' : 'fallback'} | main thread is responsive`
       );
     }, 3000);
   }, true);
@@ -202,5 +198,5 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// START EVENT remains owned by the core game; the bootstrap only guarantees
-// the critical controls and prerace broadcast director before handing it over.
+// START EVENT remains owned by the core game; bootstrap guarantees the critical
+// controls and deterministic prerace broadcast director first.
