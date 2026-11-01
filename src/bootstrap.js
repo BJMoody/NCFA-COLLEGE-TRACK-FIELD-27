@@ -4,67 +4,37 @@ const bootStatus = bootScreen?.querySelector('small');
 
 let loading = false;
 let ready = false;
-let uiPromise = null;
-let perfPromise = null;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
-  window.NCFA_UI_V11?.setLoading?.(text);
 }
 
-function loadUi() {
-  if (!uiPromise) uiPromise = import('./ui-v11.js').catch((error) => console.warn('NCFA UI extras failed softly', error));
-  return uiPromise;
+function showMenuImmediately() {
+  document.querySelectorAll('.screen').forEach((screen) => screen.classList.remove('screen--active'));
+  document.querySelector('#main-menu')?.classList.add('screen--active');
 }
 
-function loadPerformanceGovernor() {
-  if (!perfPromise) perfPromise = import('./perf-v10.js');
-  return perfPromise;
-}
+function loadEnhancementsInBackground() {
+  const run = () => {
+    Promise.allSettled([
+      import('./ui-v11.js'),
+      import('./control-v9.js'),
+      import('./mobile.js'),
+      import('./mobile-boost.js'),
+      import('./venue-pacers.js'),
+      import('./presentation.js'),
+      import('./perf-v10.js'),
+      // Warm the stadium module only after the menu is already usable.
+      import('./world-fast-v11.js')
+    ]).then((results) => {
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') console.warn(`Optional NCFA module ${index} failed softly`, result.reason);
+      });
+    });
+  };
 
-function absolute(path) {
-  return new URL(path, import.meta.url).href;
-}
-
-async function importFastCoreGame() {
-  const gameUrl = absolute('./game.js');
-  const response = await fetch(gameUrl, { cache: 'no-cache' });
-  if (!response.ok) throw new Error(`Could not fetch game.js (${response.status})`);
-
-  let source = await response.text();
-  const imports = new Map([
-    ["'./data.js'", `'${absolute('./data.js')}'`],
-    ["'./athlete.js'", `'${absolute('./athlete.js')}'`],
-    ["'./world.js'", `'${absolute('./world-fast-v11.js')}'`],
-    ["'./audio.js'", `'${absolute('./audio.js')}'`],
-    ["'./commentary.js'", `'${absolute('./commentary.js')}'`]
-  ]);
-  for (const [from, to] of imports) source = source.split(from).join(to);
-
-  // Never construct a stadium on title/menu/career screens. The 3D world is
-  // created only when the player starts a race or field event.
-  source = source.replace('\nloadWorld(venue);\n\nfunction renderCareers()', '\n\nfunction renderCareers()');
-  source = source.replace(
-    "if (state.venueId) venue = VENUES.find((v) => v.id === state.venueId) || venue;\n    loadWorld(venue);",
-    "if (state.venueId) venue = VENUES.find((v) => v.id === state.venueId) || venue;"
-  );
-  source = source.replace(
-    "$('#return-hub').addEventListener('click', () => { cleanupCompetition(); venue = randomVenue(); loadWorld(venue); renderHub(); setMode('hub', 'career-hub'); });",
-    "$('#return-hub').addEventListener('click', () => { cleanupCompetition(); venue = randomVenue(); renderHub(); setMode('hub', 'career-hub'); });"
-  );
-  source = source.split('world.update(elapsed);').join('world?.update(elapsed);');
-  source = source.replace(
-    "world.setCrowdReaction('idle');\n  window.__NCFA_RACE_PHASE = 'idle';",
-    "world?.setCrowdReaction('idle');\n  if (world) { world.dispose(); world = null; }\n  window.__NCFA_RACE_PHASE = 'idle';"
-  );
-
-  const blob = new Blob([source, '\n//# sourceURL=ncfa-game-v12.js'], { type: 'text/javascript' });
-  const blobUrl = URL.createObjectURL(blob);
-  try {
-    await import(blobUrl);
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
-  }
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 2500 });
+  else setTimeout(run, 350);
 }
 
 async function loadGame() {
@@ -72,43 +42,17 @@ async function loadGame() {
   loading = true;
 
   enterButton.disabled = true;
-  enterButton.textContent = 'LOADING GAME…';
-  setStatus('Preparing the race engine…');
+  enterButton.textContent = 'LOADING…';
+  setStatus('Loading career menu…');
   document.documentElement.classList.add('ncfa-loading');
 
-  // Let the button/loading state paint before any module/network/WebGL work.
+  // Paint the loading state before parsing Three.js/game code.
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   try {
-    // These do not begin until the player explicitly presses ENTER.
-    const [uiResult, perfResult] = await Promise.allSettled([
-      loadUi(),
-      loadPerformanceGovernor()
-    ]);
-    if (uiResult.status === 'rejected') console.warn('UI enhancement load failed', uiResult.reason);
-    if (perfResult.status === 'rejected') console.warn('Performance governor load failed', perfResult.reason);
-    window.NCFA_UI_V11?.showLoading?.('Loading career and race systems…');
-
-    setStatus('Loading career and race systems…');
-    try {
-      await importFastCoreGame();
-    } catch (fastError) {
-      console.warn('Fast loader failed; using compatibility core.', fastError);
-      setStatus('Using compatibility loader…');
-      await import('./game.js');
-    }
-
-    setStatus('Loading broadcast and controls…');
-    const extras = await Promise.allSettled([
-      import('./presentation.js'),
-      import('./control-v9.js'),
-      import('./mobile.js'),
-      import('./mobile-boost.js'),
-      import('./venue-pacers.js')
-    ]);
-    extras.forEach((result, index) => {
-      if (result.status === 'rejected') console.warn(`Optional NCFA module ${index} failed softly`, result.reason);
-    });
+    // Direct module import: no fetch-as-text, source rewriting, Blob module,
+    // compatibility double-parse, or stadium construction on the critical path.
+    await import('./game.js');
 
     ready = true;
     loading = false;
@@ -116,15 +60,15 @@ async function loadGame() {
     enterButton.disabled = false;
     enterButton.textContent = 'ENTER GAME';
     setStatus('Ready');
-    window.NCFA_UI_V11?.hideLoading?.();
 
-    // game.js installs its normal Enter handler during import.
-    enterButton.click();
+    // Do NOT re-click the game's Enter handler here. That handler waits for
+    // crowd audio before showing the menu. Menu first; meet audio can load later.
+    showMenuImmediately();
+    loadEnhancementsInBackground();
   } catch (error) {
-    console.error('NCFA bootstrap failed', error);
+    console.error('NCFA core load failed', error);
     loading = false;
     document.documentElement.classList.remove('ncfa-loading');
-    window.NCFA_UI_V11?.hideLoading?.();
     enterButton.disabled = false;
     enterButton.textContent = 'RETRY';
     setStatus('Load failed • tap RETRY');
@@ -138,5 +82,4 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// IMPORTANT: intentionally no requestIdleCallback, prefetch, Three.js import,
-// MutationObserver setup, polling, or WebGL work before ENTER GAME is pressed.
+// Intentionally zero game/Three/WebGL work before ENTER GAME.
