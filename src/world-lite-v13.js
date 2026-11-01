@@ -66,10 +66,10 @@ export function createWorld(scene, venue) {
 
   function beginBuild() {
     if (disposed || built || buildPromise || !raceOrFieldVisible()) return;
-    buildPromise = import('./world-fast-v11.js')
-      .then(({ createWorld: createFastWorld }) => {
+    buildPromise = import('./world-progressive-v14.js')
+      .then(({ createWorld: createProgressiveWorld }) => {
         if (disposed) return null;
-        built = createFastWorld(scene, venue);
+        built = createProgressiveWorld(scene, venue);
         if (pendingTexture) built.setBroadcastTexture?.(pendingTexture);
         built.setBroadcastClock?.(...pendingClock);
         built.setCrowdReaction?.(pendingReaction);

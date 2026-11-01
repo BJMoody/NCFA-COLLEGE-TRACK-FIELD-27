@@ -4,6 +4,8 @@ const bootStatus = bootScreen?.querySelector('small');
 
 let loading = false;
 let ready = false;
+let enhancementIndex = 0;
+let enhancementPaused = false;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
@@ -14,27 +16,60 @@ function showMenuImmediately() {
   document.querySelector('#main-menu')?.classList.add('screen--active');
 }
 
-function loadEnhancementsInBackground() {
-  const run = () => {
-    Promise.allSettled([
-      import('./ui-v11.js'),
-      import('./control-v9.js'),
-      import('./mobile.js'),
-      import('./mobile-boost.js'),
-      import('./venue-pacers.js'),
-      import('./presentation.js'),
-      import('./perf-v10.js'),
-      // Warm the stadium module only after the menu is already usable.
-      import('./world-fast-v11.js')
-    ]).then((results) => {
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') console.warn(`Optional NCFA module ${index} failed softly`, result.reason);
-      });
-    });
+function competitionActive() {
+  return Boolean(
+    document.querySelector('#race-hud.screen--active') ||
+    document.querySelector('#field-screen.screen--active') ||
+    document.querySelector('#finish-cinematic.screen--active')
+  );
+}
+
+const enhancementModules = [
+  './ui-v11.js',
+  './venue-pacers.js',
+  './control-v9.js',
+  ...(navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches ? ['./mobile.js', './mobile-boost.js'] : []),
+  './presentation.js',
+  './perf-v10.js'
+];
+
+function scheduleEnhancementStep(delay = 0) {
+  if (enhancementPaused || enhancementIndex >= enhancementModules.length) return;
+
+  const schedule = () => {
+    const run = async () => {
+      if (enhancementPaused || enhancementIndex >= enhancementModules.length) return;
+      if (competitionActive()) {
+        setTimeout(() => scheduleEnhancementStep(0), 900);
+        return;
+      }
+
+      const path = enhancementModules[enhancementIndex++];
+      try {
+        await import(path);
+      } catch (error) {
+        console.warn(`Optional NCFA module failed softly: ${path}`, error);
+      }
+
+      // Give the browser a clean frame between module parses/initializers.
+      requestAnimationFrame(() => scheduleEnhancementStep(0));
+    };
+
+    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 1200 });
+    else setTimeout(run, 80);
   };
 
-  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 2500 });
-  else setTimeout(run, 350);
+  if (delay) setTimeout(schedule, delay);
+  else schedule();
+}
+
+function beginEnhancementLoading() {
+  enhancementPaused = false;
+  scheduleEnhancementStep(120);
+
+  // When the player opens meet setup, prioritize the remaining race modules
+  // while they are choosing venue/role instead of waiting for START EVENT.
+  document.querySelector('#race-now')?.addEventListener('click', () => scheduleEnhancementStep(0), { passive: true });
 }
 
 async function loadGame() {
@@ -46,12 +81,11 @@ async function loadGame() {
   setStatus('Loading career menu…');
   document.documentElement.classList.add('ncfa-loading');
 
-  // Paint the loading state before parsing Three.js/game code.
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   try {
-    // Direct module import: no fetch-as-text, source rewriting, Blob module,
-    // compatibility double-parse, or stadium construction on the critical path.
+    // One direct core import. No source rewriting, Blob import, stadium build,
+    // audio wait, or optional-module fan-out on the menu critical path.
     await import('./game.js');
 
     ready = true;
@@ -61,10 +95,8 @@ async function loadGame() {
     enterButton.textContent = 'ENTER GAME';
     setStatus('Ready');
 
-    // Do NOT re-click the game's Enter handler here. That handler waits for
-    // crowd audio before showing the menu. Menu first; meet audio can load later.
     showMenuImmediately();
-    loadEnhancementsInBackground();
+    beginEnhancementLoading();
   } catch (error) {
     console.error('NCFA core load failed', error);
     loading = false;
@@ -82,4 +114,5 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// Intentionally zero game/Three/WebGL work before ENTER GAME.
+// Zero game/Three/WebGL work before ENTER GAME, and no stadium module warm-up
+// while browsing menus. The stadium is loaded progressively only for a meet.
