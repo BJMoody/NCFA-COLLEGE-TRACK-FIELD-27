@@ -292,14 +292,15 @@ function initialLaneFloat(event, i) {
 function createRaceRunners(event) {
   const effects = supplementEffects();
   const playerRating = currentPlayerRating();
-  const offsets = [0, 0.7, -0.5, 0.25, 1.05, -0.25, -0.85, 0.55];
   return ROSTER.map((seed, i) => {
-    const config = { ...seed, rating: seed.player ? playerRating : playerRating + (offsets[i] ?? 0) };
+    // Opponents keep their real roster ratings. They no longer scale to the
+    // player's current rating, so player development actually creates separation.
+    const config = { ...seed, rating: seed.player ? playerRating : seed.rating };
     const mesh = createAthlete(config, i + 1);
     world.group.add(mesh);
     const dayForm = seed.player ? meetContext.form : 0.990 + Math.random() * 0.020;
     const heatBias = seed.player ? 0 : (meetContext.heatStrength - 1) * 0.45;
-    const fitnessFactor = 1 + (config.rating - playerRating) * 0.0032 + (dayForm - 1) * 0.65 + heatBias;
+    const fitnessFactor = 1 + (config.rating - playerRating) * 0.0058 + (dayForm - 1) * 0.65 + heatBias;
     return {
       ...config,
       seedIndex: i,
@@ -738,7 +739,7 @@ function updateRunner(r, dt) {
     paceFactor = THREE.MathUtils.clamp(0.70 + effort * 0.31, 0.79, 1.12);
     if (surgeTimer > 0) paceFactor += 0.025;
   } else {
-    paceFactor = 0.94 + effort * 0.075;
+    paceFactor = 0.925 + effort * 0.075;
   }
 
   let target = baseSpeed * paceFactor * (1 - fatigue) * (1 + draftingBonus(r));
