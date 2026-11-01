@@ -5,7 +5,7 @@ const bootStatus = bootScreen?.querySelector('small');
 let loading = false;
 let ready = false;
 let enhancementIndex = 0;
-let enhancementPaused = false;
+let enhancementsStarted = false;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
@@ -25,24 +25,20 @@ function competitionActive() {
 }
 
 const enhancementModules = [
-  './ui-v11.js',
-  './venue-pacers.js',
   './control-v9.js',
+  './venue-pacers.js',
   ...(navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches ? ['./mobile.js', './mobile-boost.js'] : []),
   './presentation.js',
-  './perf-v10.js'
+  './ui-v11.js'
 ];
 
 function scheduleEnhancementStep(delay = 0) {
-  if (enhancementPaused || enhancementIndex >= enhancementModules.length) return;
+  if (!enhancementsStarted || enhancementIndex >= enhancementModules.length) return;
 
   const schedule = () => {
     const run = async () => {
-      if (enhancementPaused || enhancementIndex >= enhancementModules.length) return;
-      if (competitionActive()) {
-        setTimeout(() => scheduleEnhancementStep(0), 900);
-        return;
-      }
+      if (!enhancementsStarted || enhancementIndex >= enhancementModules.length) return;
+      if (competitionActive()) return;
 
       const path = enhancementModules[enhancementIndex++];
       try {
@@ -51,25 +47,35 @@ function scheduleEnhancementStep(delay = 0) {
         console.warn(`Optional NCFA module failed softly: ${path}`, error);
       }
 
-      // Give the browser a clean frame between module parses/initializers.
-      requestAnimationFrame(() => scheduleEnhancementStep(0));
+      // Never parse several optional modules in the same frame.
+      requestAnimationFrame(() => requestAnimationFrame(() => scheduleEnhancementStep(0)));
     };
 
-    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 1200 });
-    else setTimeout(run, 80);
+    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 900 });
+    else setTimeout(run, 120);
   };
 
   if (delay) setTimeout(schedule, delay);
   else schedule();
 }
 
-function beginEnhancementLoading() {
-  enhancementPaused = false;
-  scheduleEnhancementStep(120);
+function beginRaceEnhancements() {
+  if (enhancementsStarted) return;
+  enhancementsStarted = true;
+  scheduleEnhancementStep(0);
+}
 
-  // When the player opens meet setup, prioritize the remaining race modules
-  // while they are choosing venue/role instead of waiting for START EVENT.
-  document.querySelector('#race-now')?.addEventListener('click', () => scheduleEnhancementStep(0), { passive: true });
+function installMeetSetupTrigger() {
+  const meetSetup = document.querySelector('#meet-setup');
+  if (!meetSetup) return;
+
+  const check = () => {
+    if (meetSetup.classList.contains('screen--active')) beginRaceEnhancements();
+  };
+
+  const observer = new MutationObserver(check);
+  observer.observe(meetSetup, { attributes: true, attributeFilter: ['class'] });
+  check();
 }
 
 async function loadGame() {
@@ -84,8 +90,9 @@ async function loadGame() {
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   try {
-    // One direct core import. No source rewriting, Blob import, stadium build,
-    // audio wait, or optional-module fan-out on the menu critical path.
+    // Load the renderer guard before game.js creates its WebGLRenderer.
+    // This guarantees career/event/meet setup screens never draw WebGL frames.
+    await import('./perf-v10.js');
     await import('./game.js');
 
     ready = true;
@@ -96,7 +103,7 @@ async function loadGame() {
     setStatus('Ready');
 
     showMenuImmediately();
-    beginEnhancementLoading();
+    installMeetSetupTrigger();
   } catch (error) {
     console.error('NCFA core load failed', error);
     loading = false;
@@ -114,5 +121,5 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// Zero game/Three/WebGL work before ENTER GAME, and no stadium module warm-up
-// while browsing menus. The stadium is loaded progressively only for a meet.
+// Zero Three/WebGL work before ENTER. After ENTER, setup screens are HTML-only;
+// race-specific modules begin staging only when MEET SETUP actually opens.

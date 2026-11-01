@@ -8,6 +8,14 @@ const lowPower = touch && ((memory > 0 && memory <= 4) || (cores > 0 && cores <=
 document.documentElement.classList.toggle('ncfa-low-power', lowPower);
 document.documentElement.classList.toggle('ncfa-touch-performance', touch);
 
+function competitionVisible() {
+  return Boolean(
+    document.querySelector('#race-hud.screen--active') ||
+    document.querySelector('#field-screen.screen--active') ||
+    document.querySelector('#finish-cinematic.screen--active')
+  );
+}
+
 const proto = THREE.WebGLRenderer.prototype;
 if (!proto.__ncfaPerfV10) {
   Object.defineProperty(proto, '__ncfaPerfV10', { value: true });
@@ -18,35 +26,37 @@ if (!proto.__ncfaPerfV10) {
   const lastMain = new WeakMap();
 
   proto.setPixelRatio = function ncfaSetPixelRatio(value) {
-    const cap = lowPower ? 1.0 : touch ? 1.18 : 1.8;
+    const cap = lowPower ? 1.0 : touch ? 1.18 : 1.65;
     return originalSetPixelRatio.call(this, Math.min(value, cap));
   };
 
   proto.render = function ncfaRender(scene, camera) {
+    if (document.hidden) return;
+
+    // Critical v15 rule: menus, career/event setup, classes, practice, shop,
+    // and meet setup are HTML screens. They should consume ZERO WebGL frames.
+    // game.js still owns its lightweight JS loop, but the GPU stays asleep
+    // until an actual competition screen is visible.
+    if (!competitionVisible()) return;
+
     const now = performance.now();
     const renderTarget = this.getRenderTarget?.();
 
-    // The stadium videoboard is a second full scene render. Do not render it
-    // while the player is on menus, the hub, classes, practice, or the shop.
+    // The stadium videoboard is a second full scene render. Only draw it
+    // during the race HUD and at a deliberately low refresh rate.
     if (renderTarget) {
       const raceVisible = Boolean(document.querySelector('#race-hud.screen--active'));
-      if (!raceVisible || document.hidden) return;
-
-      // The board does not need 60 FPS. 10-20 FPS still looks live while
-      // saving a large amount of GPU work, especially on phones/tablets.
-      const minInterval = lowPower ? 110 : touch ? 80 : 50;
+      if (!raceVisible) return;
+      const minInterval = lowPower ? 120 : touch ? 85 : 55;
       const last = lastOffscreen.get(this) || 0;
       if (now - last < minInterval) return;
       lastOffscreen.set(this, now);
       return originalRender.call(this, scene, camera);
     }
 
-    if (document.hidden) return;
-
-    // Cap only the visual render rate on touch hardware. Physics/input loops
-    // still update normally, so controls remain responsive.
+    // Cap touch rendering without slowing physics/input updates.
     if (touch) {
-      const minInterval = lowPower ? 32 : 21;
+      const minInterval = lowPower ? 33 : 22;
       const last = lastMain.get(this) || 0;
       if (now - last < minInterval) return;
       lastMain.set(this, now);
