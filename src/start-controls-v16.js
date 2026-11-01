@@ -58,8 +58,7 @@ function tick() {
     failSafeUsed = true;
     emit('Enter', 'Enter');
   }
-
-  requestAnimationFrame(tick);
 }
 
-requestAnimationFrame(tick);
+// Low-frequency watchdog only; no permanent animation-frame loop on menus.
+setInterval(tick, 250);
