@@ -9,7 +9,7 @@ let enhancementsStarted = false;
 let criticalStartAttempted = false;
 let preparingCriticalStart = false;
 window.__NCFA_CONTROL_V9_READY = false;
-window.__NCFA_PRERACE_V20_READY = false;
+window.__NCFA_PRERACE_V21_READY = false;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
@@ -137,7 +137,7 @@ function installStartDiagnostics() {
       if (!stillSetup) return;
       reportRuntimeIssue(
         'START EVENT STALLED',
-        `phase=${window.__NCFA_RACE_PHASE || 'unknown'} | controls=${window.__NCFA_CONTROL_V9_READY ? 'ready' : 'fallback'} | prerace=${window.__NCFA_PRERACE_V20_READY ? 'ready' : 'missing'} | main thread is responsive`
+        `phase=${window.__NCFA_RACE_PHASE || 'unknown'} | controls=${window.__NCFA_CONTROL_V9_READY ? 'ready' : 'fallback'} | prerace=${window.__NCFA_PRERACE_V21_READY ? 'ready' : 'missing'} | main thread is responsive`
       );
     }, 3000);
   }, true);
@@ -156,10 +156,10 @@ async function loadGame() {
 
   try {
     await import('./perf-v10.js');
-    // One authoritative prerace module owns camera, staging, stadium dressing,
-    // and the starter before game.js creates its renderer/scene.
-    await import('./prerace-v20.js');
-    window.__NCFA_PRERACE_V20_READY = true;
+    // Unique v21 path prevents stale cached prerace code from surviving deploys.
+    // It owns prerace camera, runner staging, stadium dressing, and the starter.
+    await import('./prerace-v21.js');
+    window.__NCFA_PRERACE_V21_READY = true;
     await import('./audio-safety-v16.js');
     await import('./start-controls-v16.js');
     await import('./game.js');
@@ -193,4 +193,4 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// START EVENT remains owned by the core game. v20 owns the prerace broadcast.
+// START EVENT remains owned by the core game. v21 owns the prerace broadcast.
