@@ -1,71 +1,20 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { EVENTS } from './data.js';
 import { createAthlete, animateAthlete } from './athlete.js';
-import { stadiumPoint, INNER_RADIUS, LANE_WIDTH } from './world.js';
-
-// This module intentionally loads before game.js. It fixes the scoreboard sightline
-// as the venue is built, then adds non-scoring pace athletes to distance races.
-
-const BOARD_X = 52;
-const BOARD_Z = 92;
-const BOARD_Y = 18;
-const BOARD_YAW = Math.atan2(-BOARD_X, -BOARD_Z);
-const boardNormal = new THREE.Vector3(Math.sin(BOARD_YAW), 0, Math.cos(BOARD_YAW));
+import { stadiumPoint, eventStartBase, INNER_RADIUS, LANE_WIDTH } from './world.js';
 
 let athleteParent = null;
 const originalAdd = THREE.Object3D.prototype.add;
-
-function near(a, b, eps = 0.06) { return Math.abs((a ?? 0) - b) < eps; }
-
-function relocateVideoBoard(object) {
-  const g = object?.geometry;
-  const p = g?.parameters;
-  if (!p) return;
-
-  // Main 27 x 14 x 1.5 shell.
-  if (g.type === 'BoxGeometry' && near(p.width, 27) && near(p.height, 14) && near(p.depth, 1.5)) {
-    object.position.set(BOARD_X, BOARD_Y, BOARD_Z);
-    object.rotation.y = BOARD_YAW;
-    object.castShadow = true;
-    object.userData.ncfaVideoBoard = 'shell';
-  }
-
-  // 23.8 x 10.2 display face. Move it slightly toward the infield so the shell
-  // can never clip through the live screen or the career-hub camera.
-  if (g.type === 'PlaneGeometry' && near(p.width, 23.8) && near(p.height, 10.2)) {
-    object.position.set(
-      BOARD_X + boardNormal.x * 0.82,
-      BOARD_Y,
-      BOARD_Z + boardNormal.z * 0.82
-    );
-    object.rotation.set(0, BOARD_YAW, 0);
-    object.frustumCulled = true;
-    object.userData.ncfaVideoBoard = 'screen';
-  }
-
-  // Main support column.
-  if (g.type === 'BoxGeometry' && near(p.width, 2.4) && near(p.height, 12) && near(p.depth, 2.4)) {
-    object.position.set(BOARD_X, 7.0, BOARD_Z);
-    object.userData.ncfaVideoBoard = 'support';
-  }
+if (!THREE.Object3D.prototype.__ncfaPacerCapture) {
+  Object.defineProperty(THREE.Object3D.prototype, '__ncfaPacerCapture', { value: true });
+  THREE.Object3D.prototype.add = function ncfaPacerCapture(...objects) {
+    const result = originalAdd.apply(this, objects);
+    for (const object of objects) {
+      if (object?.userData?.isNCFAAthlete && !object.userData.aiPacer) athleteParent = this;
+    }
+    return result;
+  };
 }
-
-THREE.Object3D.prototype.add = function ncfaAdd(...objects) {
-  const result = originalAdd.apply(this, objects);
-  for (const object of objects) {
-    relocateVideoBoard(object);
-    if (object?.userData?.isNCFAAthlete && !object.userData.aiPacer) athleteParent = this;
-  }
-  return result;
-};
-
-const START_BASE = {
-  '800m': 310,
-  '1500m': 112,
-  '3000m': 310,
-  '5000m': 112,
-  '10000m': 0
-};
 
 const PACER_LOOKS = [
   { name: 'Eli Navarro', school: 'METRO PACER', color: 0xf5f5f5, shorts: 0x111418, skin: 0xb97854, trim: '#ffcf33', hairStyle: 'fade' },
@@ -84,11 +33,11 @@ function eventDistance(name) {
 }
 function assignmentTarget() {
   const text = document.querySelector('#pace-assignment')?.textContent || '';
-  const match = text.match(/through roughly\s+(\d+)m/i);
+  const match = text.match(/(?:roughly|approximately)\s+(\d+)m/i);
   return match ? Number(match[1]) : null;
 }
 function hasPlayerPaceJob() {
-  return /PACER|PACING JOB|Lead or help control/i.test(document.querySelector('#pace-assignment')?.textContent || '');
+  return window.__NCFA_PLAYER_ROLE === 'pace' && /PACER|pacing job|control the field/i.test(document.querySelector('#pace-assignment')?.textContent || '');
 }
 
 function defaultTargets(distance) {
@@ -115,20 +64,19 @@ function addPacerBanner(text) {
 
 function createPacer(index, ev, distance, target) {
   if (!athleteParent) return null;
-  const cfg = { ...PACER_LOOKS[index % PACER_LOOKS.length], rating: 81, player: false };
+  const cfg = { ...PACER_LOOKS[index % PACER_LOOKS.length], rating: 80, player: false };
   const mesh = createAthlete(cfg, 90 + index);
-  mesh.userData.isNCFAAthlete = false; // do not enter the scoring/collision roster
+  mesh.userData.isNCFAAthlete = false;
   mesh.userData.aiPacer = true;
   mesh.scale.multiplyScalar(0.995);
   athleteParent.add(mesh);
 
   const baseTime = Number(EVENTS[ev]?.baseTime || 120);
   const average = distance / baseTime;
-  const paceBoost = index === 0 ? 1.025 : 1.015;
-  const speed = average * paceBoost;
-  const lane = 1.20 + index * 0.35;
+  const speed = average * (1.00 + index * 0.003);
+  const lane = 1.18 + index * 0.30;
   const radius = INNER_RADIUS + (lane - 0.5) * LANE_WIDTH;
-  const baseCourse = START_BASE[ev] ?? 0;
+  const baseCourse = eventStartBase(ev);
 
   return {
     serial: raceSerial,
@@ -158,30 +106,35 @@ function startAiPacers() {
   activePacers.forEach((p) => p.mesh?.parent?.remove(p.mesh));
   activePacers = [];
 
-  const playerJobTarget = assignmentTarget();
-  const playerJob = hasPlayerPaceJob();
-  const shouldPace = playerJob || Math.random() < (distance >= 3000 ? 0.55 : 0.38);
-  if (!shouldPace) return;
-
-  let targets = defaultTargets(distance);
-  if (playerJobTarget) {
-    targets = distance >= 3000
-      ? [Math.max(400, Math.round(playerJobTarget * 0.7 / 100) * 100), playerJobTarget]
-      : [playerJobTarget];
+  const chance = distance >= 3000 ? 0.50 : distance >= 1500 ? 0.38 : 0.30;
+  if (Math.random() >= chance) {
+    addPacerBanner('NO AI PACER ASSIGNED • OPEN RACE');
+    return;
   }
-  targets = [...new Set(targets.filter((x) => x > 0 && x < distance))].slice(0, distance >= 3000 ? 2 : 1);
 
+  const playerTarget = hasPlayerPaceJob() ? assignmentTarget() : null;
+  let targets = defaultTargets(distance);
+  if (playerTarget) {
+    targets = distance >= 3000
+      ? [Math.max(400, Math.round(playerTarget * 0.68 / 100) * 100), Math.min(distance - 100, playerTarget)]
+      : [Math.max(200, Math.round(playerTarget * 0.75 / 100) * 100)];
+  }
+
+  const count = distance >= 3000 && Math.random() < 0.38 ? 2 : 1;
+  targets = [...new Set(targets.filter((x) => x > 0 && x < distance))].slice(0, count);
   activePacers = targets.map((target, i) => createPacer(i, ev, distance, target)).filter(Boolean);
+
   if (activePacers.length) {
     const details = activePacers.map((p) => `${p.name} to ${p.target}m`).join(' • ');
-    addPacerBanner(`AI PACERS ASSIGNED • ${details}`);
+    addPacerBanner(`AI PACER${activePacers.length > 1 ? 'S' : ''} • ${details}`);
   }
 }
 
 function updatePacers(now) {
   if (!activePacers.length) return;
   const raceActive = Boolean(document.querySelector('#race-hud.screen--active'));
-  if (!raceActive) return;
+  const clockText = document.querySelector('#race-clock')?.textContent?.trim() || '0:00.00';
+  if (!raceActive || clockText === '0:00.00' || window.__NCFA_RACE_PHASE !== 'racing') return;
 
   for (const p of activePacers) {
     if (p.removed || !p.mesh?.parent) continue;
@@ -215,6 +168,7 @@ function updatePacers(now) {
     const ahead = stadiumPoint(course + 1.4, radius);
     p.mesh.position.copy(point);
     p.mesh.lookAt(ahead.x, point.y, ahead.z);
+    p.mesh.rotateY(Math.PI);
     animateAthlete(p.mesh, now / 1000, p.dropped ? p.speed * 0.72 : p.speed, 0.08, p.phase, false);
   }
 }
@@ -233,7 +187,7 @@ function appendPacerResults() {
   list.dataset.pacersAdded = String(raceSerial);
 }
 
-window.addEventListener('ncfa:gun', () => setTimeout(startAiPacers, 60));
+window.addEventListener('ncfa:gun', () => setTimeout(startAiPacers, 80));
 
 function pacerLoop(now) {
   updatePacers(now);

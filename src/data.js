@@ -32,7 +32,7 @@ export const CAREERS = {
 };
 
 export const EVENTS = {
-  '100m': { distance: 100, kind: 'race', start: 'blocks', laneRules: 'lanes', startOptions: ['Full Stagger'], baseTime: 10.65, cadence: 4.65 },
+  '100m': { distance: 100, kind: 'race', start: 'blocks', laneRules: 'straight-lanes', startOptions: ['Straight Start'], baseTime: 10.65, cadence: 4.65 },
   '200m': { distance: 200, kind: 'race', start: 'blocks', laneRules: 'lanes', startOptions: ['Full Stagger'], baseTime: 21.55, cadence: 4.55 },
   '400m': { distance: 400, kind: 'race', start: 'blocks', laneRules: 'lanes', startOptions: ['Full Stagger'], baseTime: 47.8, cadence: 4.25 },
   '800m': { distance: 800, kind: 'race', start: 'standing', laneRules: 'break', breakDistance: 100, startOptions: ['One-Turn Stagger', 'Waterfall'], baseTime: 110.8, cadence: 3.85 },
@@ -52,6 +52,19 @@ export const EVENTS = {
   'Pentathlon': { kind: 'combined', unit: 'pts', baseMark: 3900 },
   'Heptathlon': { kind: 'combined', unit: 'pts', baseMark: 5200 },
   'Decathlon': { kind: 'combined', unit: 'pts', baseMark: 7000 }
+};
+
+// One canonical source of truth for where every running event begins in the 3D stadium.
+// Course values are metres along the oval model. The sprint chute is handled separately.
+export const EVENT_STARTS = {
+  '100m': { type: 'straight', base: null, stagger: 0 },
+  '200m': { type: 'stagger', base: 172, stagger: 3.55 },
+  '400m': { type: 'stagger', base: 360, stagger: 3.80 },
+  '800m': { type: 'choice', base: 360, stagger: 3.80, breakDistance: 100 },
+  '1500m': { type: 'arc', base: 112, stagger: 0 },
+  '3000m': { type: 'arc', base: 175, stagger: 0 },
+  '5000m': { type: 'arc', base: 175, stagger: 0 },
+  '10000m': { type: 'arc', base: 375, stagger: 0 }
 };
 
 export const VENUES = [

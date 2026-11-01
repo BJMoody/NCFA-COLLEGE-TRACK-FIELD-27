@@ -1,0 +1,28 @@
+name: Validate NCFA Browser Game
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate JavaScript module syntax
+        run: |
+          node --check src/data.js
+          node --check src/world.js
+          node --check src/athlete.js
+          node --check src/audio.js
+          node --check src/commentary.js
+          node --check src/presentation.js
+          node --check src/game.js
+          node --check src/mobile.js
+          node --check src/mobile-boost.js
+          node --check src/pace-choice.js
+          node --check src/venue-pacers.js
