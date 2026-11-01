@@ -59,7 +59,10 @@ const tapTimes = [];
 let lastTapKey = null;
 let surgeTimer = 0;
 const startState = { phase: 'idle', walkProgress: 1, falseStart: false };
+let preRaceStartedAt = 0;
+let starterOfficial = null;
 window.__NCFA_RACE_PHASE = 'idle';
+window.__NCFA_CORE_PRERACE_V22 = true;
 
 function showScreen(id) {
   $$('.screen').forEach((x) => x.classList.toggle('screen--active', x.id === id));
@@ -315,7 +318,7 @@ function createRaceRunners(event) {
       halfway: null,
       dropped: false,
       contactPenalty: 0,
-      startOffset: seed.player ? 2.6 : 0
+      startOffset: 2.6
     };
   });
 }
@@ -426,49 +429,35 @@ function showStartUi(title, copy, action, progress = 1) {
 
 function hideStartUi() { $('#interactive-start')?.classList.remove('show'); }
 
-function walkPlayerToMark() {
+function walkRunnersToMarks(duration = 1550) {
   startState.phase = 'walk';
   window.__NCFA_RACE_PHASE = 'walk';
   startState.walkProgress = 0;
-  race.player.startOffset = 2.6;
+  race.runners.forEach((r) => { r.startOffset = 2.6; });
   return new Promise((resolve) => {
-    let last = null;
-    let steps = 0;
-    const panel = showStartUi('WALK TO YOUR MARK', 'Alternate Q / P or tap STEP. You are already on the track; now move onto the actual start mark.', 'STEP TO LINE', 0);
-    const finish = () => {
-      cleanup();
-      race.player.startOffset = 0;
-      startState.walkProgress = 1;
-      stageRunners();
-      resolve();
-    };
-    const step = (side) => {
-      if (side !== 'button') {
-        if (side === last) return;
-        last = side;
-      }
-      steps += 1;
-      startState.walkProgress = Math.min(1, steps / 5);
-      race.player.startOffset = 2.6 * (1 - startState.walkProgress);
-      panel.querySelector('.is-progress i').style.width = `${startState.walkProgress * 100}%`;
-      navigator.vibrate?.(5);
-      if (steps >= 5) finish();
-    };
-    const key = (e) => {
-      if (e.code === 'KeyQ' || e.code === 'KeyP') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        step(e.code === 'KeyQ' ? 'q' : 'p');
+    const started = performance.now();
+    const frame = (now) => {
+      const raw = THREE.MathUtils.clamp((now - started) / duration, 0, 1);
+      const eased = raw * raw * (3 - 2 * raw);
+      startState.walkProgress = eased;
+      race.runners.forEach((r) => { r.startOffset = 2.6 * (1 - eased); });
+      if (raw < 1) requestAnimationFrame(frame);
+      else {
+        race.runners.forEach((r) => { r.startOffset = 0; });
+        startState.walkProgress = 1;
+        stageRunners();
+        resolve();
       }
     };
-    const click = (e) => { e.preventDefault(); step('button'); };
-    const cleanup = () => {
-      window.removeEventListener('keydown', key, true);
-      panel.querySelector('.is-action').removeEventListener('pointerdown', click);
-    };
-    window.addEventListener('keydown', key, true);
-    panel.querySelector('.is-action').addEventListener('pointerdown', click);
+    requestAnimationFrame(frame);
   });
+}
+
+function resetRunnersBehindMarks() {
+  if (!race?.runners) return;
+  race.runners.forEach((r) => { r.startOffset = 2.6; });
+  startState.walkProgress = 0;
+  stageRunners();
 }
 
 function waitForReady(blocks) {
@@ -516,16 +505,20 @@ async function runStartProcedure() {
   const blocks = race.event.start === 'blocks';
   const format = state.startFormat || 'Standard';
   const instructionFile = format === 'One-Turn Stagger' ? 'officials/one_turn_instructions_01.mp3' : format === 'Waterfall' ? 'officials/waterfall_instructions_01.mp3' : 'officials/lane_instructions_01.mp3';
+  resetRunnersBehindMarks();
   $('#starter-command').textContent = 'OFFICIAL INSTRUCTIONS';
   $('#starter-detail').textContent = `${state.event} • ${format}`;
-  await audio.queueSpeech(instructionFile);
+  await Promise.all([delay(2300), audio.queueSpeech(instructionFile)]);
   await delay(250 + Math.random() * 300);
-  await walkPlayerToMark();
 
   const attemptStart = async () => {
+    resetRunnersBehindMarks();
     $('#starter-command').textContent = 'ON YOUR MARKS';
     $('#starter-detail').textContent = `${state.event} • ${format}`;
-    await audio.queueSpeech(blocks ? 'officials/on_your_marks_blocks_01.mp3' : 'officials/on_your_marks_standing_01.mp3');
+    await Promise.all([
+      audio.queueSpeech(blocks ? 'officials/on_your_marks_blocks_01.mp3' : 'officials/on_your_marks_standing_01.mp3'),
+      walkRunnersToMarks(blocks ? 1750 : 1500)
+    ]);
     await waitForReady(blocks);
     if (blocks) {
       $('#starter-command').textContent = 'SET';
@@ -557,20 +550,25 @@ async function runStartProcedure() {
 async function preRaceIntro() {
   setMode('prerace', 'race-hud');
   window.__NCFA_RACE_PHASE = 'presentation';
+  preRaceStartedAt = performance.now();
+  resetRunnersBehindMarks();
+  ensureStarterOfficial();
   $('#starter-command').textContent = venue.name.toUpperCase();
   $('#starter-detail').textContent = `${state.event} • ${state.startFormat || 'standard start'}`;
   world.setCrowdReaction('idle');
-  stageRunners();
-  await audio.startCrowd();
+  audio.startCrowd();
+  await delay(220);
   const welcome = AUDIO.pa.welcome[(Math.random() * AUDIO.pa.welcome.length) | 0];
-  await Promise.all([delay(1800), audio.queueSpeech(welcome)]);
-  if (AUDIO.pa.event[state.event]) await audio.queueSpeech(AUDIO.pa.event[state.event]);
+  await Promise.all([delay(1900), audio.queueSpeech(welcome)]);
+  $('#starter-command').textContent = '';
+  $('#starter-detail').textContent = '';
+  if (AUDIO.pa.event[state.event]) await Promise.all([delay(2200), audio.queueSpeech(AUDIO.pa.event[state.event])]);
   if (meetContext.pacer) {
     $('#starter-command').textContent = 'PACE ASSIGNMENT';
     $('#starter-detail').textContent = `Lead through approximately ${meetContext.pacer.target}m`;
     await audio.queueSpeech('officials/pace_assignment_01.mp3');
   }
-  await commentary.preRace(state.event, state.startFormat);
+  await Promise.all([delay(1800), commentary.preRace(state.event, state.startFormat)]);
 }
 
 async function startRace() {
@@ -786,11 +784,14 @@ function resolveContacts() {
 
 function updateMeshes(t, preRace = false) {
   if (!race) return;
+  const phase = window.__NCFA_RACE_PHASE || 'idle';
+  const walking = preRace && phase === 'walk';
+  const startPose = preRace && (phase === 'ready' || phase === 'hold');
   for (const r of race.runners) {
     const { p, ahead } = pathForRunner(r);
     r.mesh.position.copy(p);
     orientRunner(r.mesh, p, ahead);
-    animateAthlete(r.mesh, t, r.speed, r.science.buffer, r.phase, preRace || !race.started);
+    animateAthlete(r.mesh, t, walking ? 2.2 : r.speed, r.science.buffer, r.phase, startPose);
   }
 }
 
@@ -952,6 +953,112 @@ async function finishField() {
   setMode('results', 'results-screen');
 }
 
+function runnerCameraFrame(r) {
+  const path = pathForRunner(r);
+  const tangent = path.ahead.clone().sub(path.p).normalize();
+  const side = new THREE.Vector3(-tangent.z, 0, tangent.x);
+  return { ...path, tangent, side };
+}
+
+function racePackCenter() {
+  if (!race?.runners?.length) return new THREE.Vector3();
+  return race.runners.reduce((sum, r) => sum.add(pathForRunner(r).p), new THREE.Vector3()).multiplyScalar(1 / race.runners.length);
+}
+
+function setMainCamera(position, target, fov = 42) {
+  camera.position.copy(position);
+  camera.lookAt(target);
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+}
+
+function buildStarterOfficial() {
+  const g = new THREE.Group();
+  g.name = 'NCFA Senior Starter';
+  const skin = new THREE.MeshStandardMaterial({ color: 0xb77c58, roughness: .82 });
+  const shirt = new THREE.MeshStandardMaterial({ color: 0xd8dde0, roughness: .72 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x15191f, roughness: .9 });
+  const grey = new THREE.MeshStandardMaterial({ color: 0xb8bcc1, roughness: .94 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(.78, .95, .42), shirt); body.position.y = 1.35; g.add(body);
+  const legs = new THREE.Mesh(new THREE.BoxGeometry(.54, .95, .34), dark); legs.position.y = .48; g.add(legs);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.24, 14, 10), skin); head.position.y = 2.08; g.add(head);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(.247, 14, 8, 0, Math.PI * 2, 0, Math.PI * .52), grey); hair.position.y = 2.15; hair.scale.y = .5; g.add(hair);
+  const rightArm = new THREE.Group(); rightArm.position.set(.45, 1.62, 0); const arm = new THREE.Mesh(new THREE.CylinderGeometry(.07, .065, .62, 7), skin); arm.position.y = -.31; rightArm.add(arm); g.add(rightArm);
+  const leftArm = rightArm.clone(); leftArm.position.x = -.45; g.add(leftArm);
+  g.userData.rightArm = rightArm;
+  return g;
+}
+
+function ensureStarterOfficial() {
+  if (!race?.runners?.length || !world?.group) return null;
+  if (!starterOfficial) starterOfficial = buildStarterOfficial();
+  if (!starterOfficial.parent) world.group.add(starterOfficial);
+  const center = racePackCenter();
+  const frame = runnerCameraFrame(race.player || race.runners[0]);
+  starterOfficial.position.copy(center.clone().addScaledVector(frame.tangent, -4.8).addScaledVector(frame.side, 6.4));
+  starterOfficial.position.y = .08;
+  starterOfficial.lookAt(center.x, 1.2, center.z);
+  starterOfficial.visible = mode === 'prerace';
+  return starterOfficial;
+}
+
+function updateStarterOfficial(elapsed) {
+  const official = ensureStarterOfficial();
+  if (!official) return;
+  const command = ($('#starter-command').textContent || '').toUpperCase();
+  const speaking = /OFFICIAL INSTRUCTIONS|ON YOUR MARKS|SET/.test(command);
+  if (official.userData.rightArm) {
+    official.userData.rightArm.rotation.x = speaking ? -.72 + Math.sin(elapsed * 5) * .10 : -.08;
+    official.userData.rightArm.rotation.z = speaking ? -.18 : 0;
+  }
+}
+
+function officialCamera() {
+  const official = ensureStarterOfficial();
+  if (!official) return;
+  const center = racePackCenter();
+  const direction = center.clone().sub(official.position).setY(0).normalize();
+  const side = new THREE.Vector3(-direction.z, 0, direction.x);
+  setMainCamera(official.position.clone().addScaledVector(direction, -2.5).addScaledVector(side, .65).add(new THREE.Vector3(0, 1.65, 0)), official.position.clone().add(new THREE.Vector3(0, 1.4, 0)), 29);
+}
+
+function updatePreRaceCamera(elapsed) {
+  if (!race?.runners?.length) return;
+  const command = ($('#starter-command').textContent || '').toUpperCase();
+  const phase = window.__NCFA_RACE_PHASE || 'presentation';
+  const player = race.player || race.runners[0];
+  const frame = runnerCameraFrame(player);
+  const center = racePackCenter();
+
+  if (command === 'OFFICIAL INSTRUCTIONS' || command === 'SET') {
+    officialCamera();
+    return;
+  }
+  if (command === 'ON YOUR MARKS' || phase === 'walk') {
+    if (startState.walkProgress < .28) officialCamera();
+    else if (startState.walkProgress < .72) setMainCamera(center.clone().addScaledVector(frame.side, 7.5).addScaledVector(frame.tangent, -1.0).add(new THREE.Vector3(0, 1.5, 0)), center.clone().add(new THREE.Vector3(0, 1.2, 0)), 35);
+    else setMainCamera(center.clone().addScaledVector(frame.tangent, -7.8).add(new THREE.Vector3(0, 2.0, 0)), center.clone().addScaledVector(frame.tangent, 7).add(new THREE.Vector3(0, 1.15, 0)), 42);
+    return;
+  }
+  if (phase === 'ready' || phase === 'hold') {
+    setMainCamera(center.clone().addScaledVector(frame.tangent, -7.8).add(new THREE.Vector3(0, 2.0, 0)), center.clone().addScaledVector(frame.tangent, 8).add(new THREE.Vector3(0, 1.15, 0)), 42);
+    return;
+  }
+
+  const t = Math.max(0, (performance.now() - preRaceStartedAt) / 1000);
+  const cycle = t % 9.6;
+  if (cycle < 1.6) setMainCamera(new THREE.Vector3(18, 16, 92), new THREE.Vector3(0, 1.5, 0), 47);
+  else if (cycle < 3.1) setMainCamera(new THREE.Vector3(-42, 5.0, 48), new THREE.Vector3(-16, 4.0, 61), 33);
+  else if (cycle < 4.4) setMainCamera(new THREE.Vector3(21, 15.0, 52), new THREE.Vector3(42, 17.5, 80), 31);
+  else if (cycle < 5.8) setMainCamera(center.clone().addScaledVector(frame.side, 7.2).addScaledVector(frame.tangent, -1.1).add(new THREE.Vector3(0, 1.6, 0)), center.clone().add(new THREE.Vector3(0, 1.25, 0)), 35);
+  else if (cycle < 7.0) setMainCamera(frame.p.clone().addScaledVector(frame.tangent, -2.1).addScaledVector(frame.side, .85).add(new THREE.Vector3(0, 1.65, 0)), frame.p.clone().add(new THREE.Vector3(0, 1.5, 0)), 28);
+  else if (cycle < 8.2) {
+    const other = race.runners[Math.min(2, race.runners.length - 1)];
+    const of = runnerCameraFrame(other);
+    setMainCamera(of.p.clone().addScaledVector(of.tangent, -2.1).addScaledVector(of.side, -.85).add(new THREE.Vector3(0, 1.65, 0)), of.p.clone().add(new THREE.Vector3(0, 1.5, 0)), 28);
+  } else setMainCamera(center.clone().addScaledVector(frame.tangent, -6.3).addScaledVector(frame.side, 4.4).add(new THREE.Vector3(0, 1.8, 0)), center.clone().add(new THREE.Vector3(0, 1.25, 0)), 39);
+}
+
 function updateRaceCamera(dt) {
   const p = race.player;
   const path = pathForRunner(p);
@@ -1025,6 +1132,8 @@ function handlePreRace(dt, elapsed) {
   if (!race) return;
   updateMeshes(elapsed, true);
   updateRaceHud();
+  updateStarterOfficial(elapsed);
+  updatePreRaceCamera(elapsed);
   updateBroadcastCamera();
   world.update(elapsed);
 }
@@ -1118,6 +1227,8 @@ $('#race-again').addEventListener('click', () => { cleanupCompetition(); prepare
 
 function cleanupCompetition() {
   if (race?.runners) race.runners.forEach((r) => { if (r.mesh?.parent) r.mesh.parent.remove(r.mesh); });
+  if (starterOfficial?.parent) starterOfficial.parent.remove(starterOfficial);
+  starterOfficial = null;
   race = null;
   field = null;
   hideStartUi();

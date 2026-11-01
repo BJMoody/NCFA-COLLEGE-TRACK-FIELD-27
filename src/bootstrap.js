@@ -9,7 +9,6 @@ let enhancementsStarted = false;
 let criticalStartAttempted = false;
 let preparingCriticalStart = false;
 window.__NCFA_CONTROL_V9_READY = false;
-window.__NCFA_PRERACE_V21_READY = false;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
@@ -137,7 +136,7 @@ function installStartDiagnostics() {
       if (!stillSetup) return;
       reportRuntimeIssue(
         'START EVENT STALLED',
-        `phase=${window.__NCFA_RACE_PHASE || 'unknown'} | controls=${window.__NCFA_CONTROL_V9_READY ? 'ready' : 'fallback'} | prerace=${window.__NCFA_PRERACE_V21_READY ? 'ready' : 'missing'} | main thread is responsive`
+        `phase=${window.__NCFA_RACE_PHASE || 'unknown'} | controls=${window.__NCFA_CONTROL_V9_READY ? 'ready' : 'fallback'} | corePrerace=${window.__NCFA_CORE_PRERACE_V22 ? 'ready' : 'missing'} | main thread is responsive`
       );
     }, 3000);
   }, true);
@@ -156,8 +155,6 @@ async function loadGame() {
 
   try {
     await import('./perf-v10.js');
-    await import('./prerace-v21.js');
-    window.__NCFA_PRERACE_V21_READY = true;
     await import('./audio-safety-v17.js');
     await import('./start-controls-v17.js');
     await import('./game.js');
@@ -191,4 +188,4 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// START EVENT remains owned by the core game. v21 owns the prerace broadcast.
+// START EVENT and prerace broadcast are owned directly by game.js core v22.
