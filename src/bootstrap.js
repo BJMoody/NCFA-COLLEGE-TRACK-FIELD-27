@@ -25,6 +25,25 @@ function competitionActive() {
   );
 }
 
+function reportRuntimeIssue(title, detail) {
+  let panel = document.querySelector('#ncfa-runtime-error');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'ncfa-runtime-error';
+    panel.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:99999;padding:14px 16px;background:#210b0b;border:2px solid #ff5757;color:#fff;font:800 13px/1.35 Arial;white-space:pre-wrap;box-shadow:0 12px 40px rgba(0,0,0,.5)';
+    document.body.appendChild(panel);
+  }
+  panel.textContent = `${title}\n${String(detail || 'Unknown error').slice(0, 1000)}`;
+}
+
+window.addEventListener('error', (event) => {
+  reportRuntimeIssue('NCFA RUNTIME ERROR', event.error?.stack || event.message || 'Unknown window error');
+});
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  reportRuntimeIssue('NCFA UNHANDLED PROMISE', reason?.stack || reason?.message || String(reason));
+});
+
 const enhancementModules = [
   './control-v9.js',
   './venue-pacers.js',
@@ -84,6 +103,23 @@ function installMeetSetupTrigger() {
   check();
 }
 
+function installStartDiagnostics() {
+  const button = document.querySelector('#start-meet');
+  if (!button) return;
+  button.addEventListener('click', () => {
+    document.querySelector('#ncfa-runtime-error')?.remove();
+    button.textContent = 'STARTING EVENT…';
+    setTimeout(() => {
+      const stillSetup = document.querySelector('#meet-setup.screen--active');
+      if (!stillSetup) return;
+      reportRuntimeIssue(
+        'START EVENT STALLED',
+        `phase=${window.__NCFA_RACE_PHASE || 'unknown'} | controls=${window.__NCFA_CONTROL_V9_READY ? 'ready' : 'fallback'} | main thread is responsive`
+      );
+    }, 3000);
+  }, true);
+}
+
 async function loadGame() {
   if (loading || ready) return;
   loading = true;
@@ -111,8 +147,10 @@ async function loadGame() {
 
     showMenuImmediately();
     installMeetSetupTrigger();
+    installStartDiagnostics();
   } catch (error) {
     console.error('NCFA core load failed', error);
+    reportRuntimeIssue('NCFA CORE LOAD FAILED', error?.stack || error?.message || String(error));
     loading = false;
     document.documentElement.classList.remove('ncfa-loading');
     enterButton.disabled = false;
@@ -128,5 +166,4 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// START EVENT is intentionally not intercepted here. The core game owns that
-// button so a race can never be blocked by optional module loading.
+// START EVENT remains owned by the core game. Diagnostics only observe it.
