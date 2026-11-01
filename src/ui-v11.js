@@ -72,12 +72,18 @@ function addRaceChrome() {
 
 function syncRaceChrome() {
   const lower = $('.broadcast-lower-third');
-  if (!lower) return;
+  const hud = $('#race-hud');
+  if (!lower || !hud) return;
+  const active = hud.classList.contains('screen--active');
+  lower.style.display = active ? '' : 'none';
+  if (!active) return;
+
   const athlete = $('#hub-athlete')?.textContent?.trim() || 'JORDAN CARTER';
   const event = $('#race-event-label')?.textContent?.trim() || $('#hub-event-group')?.textContent?.split('•').pop()?.trim() || '800M';
-  $('#v11-athlete-name').textContent = athlete.toUpperCase();
-  $('#v11-event-name').textContent = event.toUpperCase();
-  lower.style.display = $('#race-hud')?.classList.contains('screen--active') ? '' : 'none';
+  const athleteEl = $('#v11-athlete-name');
+  const eventEl = $('#v11-event-name');
+  if (athleteEl) athleteEl.textContent = athlete.toUpperCase();
+  if (eventEl) eventEl.textContent = event.toUpperCase();
 }
 
 function polishMeet() {
@@ -85,7 +91,9 @@ function polishMeet() {
   if (!meet || meet.dataset.v11) return;
   meet.dataset.v11 = '1';
   const title = $('#meet-title');
-  if (title && !title.textContent.includes('MEET SETUP')) title.insertAdjacentHTML('beforebegin', '<div class="eyebrow">MEET SETUP</div>');
+  if (title && !title.previousElementSibling?.classList.contains('v11-meet-label')) {
+    title.insertAdjacentHTML('beforebegin', '<div class="eyebrow v11-meet-label">MEET SETUP</div>');
+  }
 }
 
 function exposeLoaderApi() {
@@ -110,13 +118,12 @@ brandMenu();
 addRaceChrome();
 polishMeet();
 exposeLoaderApi();
+syncRaceChrome();
 
-const observer = new MutationObserver(() => {
-  brandBoot();
-  brandMenu();
-  addRaceChrome();
-  polishMeet();
-  syncRaceChrome();
-});
-observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true });
-setInterval(syncRaceChrome, 500);
+// Watch only the race HUD becoming active/inactive. No whole-document
+// MutationObserver and no setInterval polling.
+const raceHud = $('#race-hud');
+if (raceHud) {
+  const raceObserver = new MutationObserver(syncRaceChrome);
+  raceObserver.observe(raceHud, { attributes: true, attributeFilter: ['class'] });
+}
