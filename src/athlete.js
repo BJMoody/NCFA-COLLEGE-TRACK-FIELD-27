@@ -90,11 +90,15 @@ function makeArm(side, skinMat) {
 export function createAthlete(config, bibNumber = 1) {
   const group = new THREE.Group();
   group.userData.config = config;
+  group.userData.bibNumber = bibNumber;
+  group.userData.isNCFAAthlete = true;
 
   const skinMat = material(config.skin ?? 0x8a583b, 0.7);
-  const jerseyMat = material(config.color ?? 0xf1c40f, 0.48);
-  const shortsMat = material(config.shorts ?? 0x15171a, 0.7);
-  const shoeMat = material(0xf3f4f5, 0.42);
+  const jerseyMat = material(config.color ?? 0xf1c40f, 0.42);
+  jerseyMat.clearcoat = 0.16;
+  jerseyMat.clearcoatRoughness = 0.58;
+  const shortsMat = material(config.shorts ?? 0x15171a, 0.64);
+  const shoeMat = material(0xf3f4f5, 0.36);
   const hairMat = material(0x17120f, 0.82);
 
   const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.30, 0.30), shortsMat);
@@ -127,7 +131,7 @@ export function createAthlete(config, bibNumber = 1) {
 
   const bib = new THREE.Mesh(
     new THREE.PlaneGeometry(0.46, 0.31),
-    new THREE.MeshStandardMaterial({ map: makeBibTexture(config.school ?? 'NCFA', bibNumber), roughness: 0.76 })
+    new THREE.MeshStandardMaterial({ map: makeBibTexture(config.school ?? 'NCFA', bibNumber), roughness: 0.72 })
   );
   bib.position.set(0, 1.49, -0.224);
   bib.rotation.y = Math.PI;
@@ -155,46 +159,73 @@ export function createAthlete(config, bibNumber = 1) {
   return group;
 }
 
+function runningLegPose(leg, phase, normalized, fatigue) {
+  const swing = Math.sin(phase);
+  const recovery = Math.max(0, Math.sin(phase + 0.78));
+  const drive = Math.max(0, -Math.sin(phase - 0.22));
+  const hipAmplitude = 0.58 + normalized * 0.34;
+  const kneeLift = (0.72 + normalized * 0.72) * (1 - fatigue * 0.14);
+
+  leg.hip.rotation.x = swing * hipAmplitude;
+  leg.knee.rotation.x = 0.08 + recovery * kneeLift + drive * 0.22;
+  leg.ankle.rotation.x = -0.12 - recovery * 0.22 + drive * 0.10;
+  leg.hip.rotation.z = Math.sin(phase * 0.5) * 0.018;
+}
+
 export function animateAthlete(group, time, speed, fatigue = 0, phase = 0, startPose = false) {
   const rig = group.userData.rig;
   if (!rig) return;
 
+  const f = THREE.MathUtils.clamp(fatigue, 0, 1);
+
   if (startPose) {
-    rig.torso.rotation.x = 0.12;
-    rig.leftLeg.hip.rotation.x = -0.35;
-    rig.rightLeg.hip.rotation.x = 0.38;
-    rig.leftLeg.knee.rotation.x = 0.58;
-    rig.rightLeg.knee.rotation.x = 0.42;
-    rig.leftArm.shoulder.rotation.x = 0.55;
-    rig.rightArm.shoulder.rotation.x = -0.45;
-    rig.leftArm.elbow.rotation.x = -0.78;
-    rig.rightArm.elbow.rotation.x = -0.78;
+    rig.torso.rotation.set(0.10, 0, 0);
+    rig.pelvis.rotation.set(0, 0, 0);
+    rig.leftLeg.hip.rotation.set(-0.30, 0, 0);
+    rig.rightLeg.hip.rotation.set(0.34, 0, 0);
+    rig.leftLeg.knee.rotation.x = 0.52;
+    rig.rightLeg.knee.rotation.x = 0.30;
+    rig.leftLeg.ankle.rotation.x = -0.08;
+    rig.rightLeg.ankle.rotation.x = -0.08;
+    rig.leftArm.shoulder.rotation.set(0.44, 0, 0);
+    rig.rightArm.shoulder.rotation.set(-0.40, 0, 0);
+    rig.leftArm.elbow.rotation.x = -1.20;
+    rig.rightArm.elbow.rotation.x = -1.20;
+    rig.headRoot.rotation.set(-0.03, 0, 0);
     return;
   }
 
-  const normalized = THREE.MathUtils.clamp(speed / 9.5, 0, 1);
-  const cadence = 4.7 + normalized * 5.1;
-  const cycle = time * cadence + phase;
-  const stride = Math.sin(cycle);
-  const recover = Math.sin(cycle + Math.PI * 0.5);
-  const arm = Math.sin(cycle + Math.PI);
-  const fatigueSag = THREE.MathUtils.clamp(fatigue, 0, 1) * 0.09;
+  const normalized = THREE.MathUtils.clamp(speed / 10.5, 0, 1);
+  // Real running reads much better when the leg cycle is in actual running cadence range.
+  // 2.6–3.9 full stride cycles per second gives visible knee drive and a real flight phase.
+  const strideHz = 2.6 + normalized * 1.3;
+  const cycle = time * strideHz * Math.PI * 2 + phase;
+  const opposite = cycle + Math.PI;
 
-  rig.leftLeg.hip.rotation.x = stride * (0.58 + normalized * 0.22);
-  rig.rightLeg.hip.rotation.x = -stride * (0.58 + normalized * 0.22);
-  rig.leftLeg.knee.rotation.x = Math.max(0, -recover) * (0.72 + normalized * 0.58);
-  rig.rightLeg.knee.rotation.x = Math.max(0, recover) * (0.72 + normalized * 0.58);
-  rig.leftLeg.ankle.rotation.x = -0.10 - Math.max(0, stride) * 0.22;
-  rig.rightLeg.ankle.rotation.x = -0.10 - Math.max(0, -stride) * 0.22;
+  runningLegPose(rig.leftLeg, cycle, normalized, f);
+  runningLegPose(rig.rightLeg, opposite, normalized, f);
 
-  rig.leftArm.shoulder.rotation.x = arm * (0.58 + normalized * 0.18);
-  rig.rightArm.shoulder.rotation.x = -arm * (0.58 + normalized * 0.18);
-  rig.leftArm.elbow.rotation.x = -0.72 - Math.max(0, -arm) * 0.18;
-  rig.rightArm.elbow.rotation.x = -0.72 - Math.max(0, arm) * 0.18;
+  const armSwing = 0.62 + normalized * 0.34;
+  const leftArm = Math.sin(opposite);
+  const rightArm = Math.sin(cycle);
+  rig.leftArm.shoulder.rotation.x = leftArm * armSwing;
+  rig.rightArm.shoulder.rotation.x = rightArm * armSwing;
+  rig.leftArm.elbow.rotation.x = -1.20 - Math.max(0, -leftArm) * 0.20;
+  rig.rightArm.elbow.rotation.x = -1.20 - Math.max(0, -rightArm) * 0.20;
+  rig.leftArm.shoulder.rotation.z = -0.05;
+  rig.rightArm.shoulder.rotation.z = 0.05;
 
-  rig.torso.rotation.x = 0.035 + normalized * 0.04 + fatigueSag;
-  rig.torso.rotation.z = Math.sin(cycle * 0.5) * 0.018;
-  rig.pelvis.rotation.y = Math.sin(cycle) * 0.035;
-  rig.headRoot.rotation.x = -fatigueSag * 0.4;
-  group.position.y += Math.abs(Math.sin(cycle * 2)) * (0.012 + normalized * 0.026);
+  const fatigueSag = f * 0.10;
+  rig.torso.rotation.x = 0.045 + normalized * 0.055 + fatigueSag;
+  rig.torso.rotation.z = Math.sin(cycle) * 0.012;
+  rig.pelvis.rotation.y = Math.sin(cycle) * 0.055;
+  rig.pelvis.rotation.z = Math.sin(cycle * 2) * 0.012;
+  rig.headRoot.rotation.x = -fatigueSag * 0.34;
+  rig.headRoot.rotation.y = Math.sin(cycle * 0.5) * 0.012;
+
+  // Visible flight phase: the body rises between contacts instead of keeping one foot
+  // visually glued to the track like a race-walk cycle.
+  const flight = Math.pow(Math.max(0, Math.sin(cycle * 2 - 0.36)), 1.35);
+  const contactCompression = Math.max(0, Math.cos(cycle * 2)) * 0.010;
+  group.position.y += flight * (0.030 + normalized * 0.055) - contactCompression;
 }
