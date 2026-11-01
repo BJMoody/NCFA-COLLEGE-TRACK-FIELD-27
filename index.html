@@ -12,70 +12,62 @@
   <div id="app">
     <canvas id="game-canvas" aria-label="NCFA College Track & Field 27 3D game"></canvas>
 
+    <button id="audio-toggle" class="audio-toggle" type="button" aria-pressed="false">SOUND: ON</button>
+
     <section id="boot-screen" class="screen screen--active">
       <div class="boot-mark">NCFA</div>
       <h1>COLLEGE TRACK &amp; FIELD <span>27</span></h1>
       <p>Every second builds a legacy.</p>
       <button id="enter-game" class="primary-btn">ENTER GAME</button>
-      <div class="boot-footer">A fictional collegiate athletics universe.</div>
+      <div class="boot-footer">Fictional college athletics universe • browser build</div>
     </section>
 
     <section id="main-menu" class="screen">
       <div class="menu-topline">
-        <div>
-          <div class="eyebrow">NCFA</div>
-          <h2>COLLEGE TRACK &amp; FIELD 27</h2>
-        </div>
+        <div><div class="eyebrow">NCFA</div><h2>COLLEGE TRACK &amp; FIELD 27</h2></div>
         <div class="season-pill">2027 SEASON</div>
       </div>
-
       <div class="menu-grid">
-        <button class="mode-card mode-card--hero" data-mode="career">
-          <span class="mode-kicker">LIVE THE JOURNEY</span>
-          <strong>CAREER</strong>
-          <small>Create an athlete. Earn offers. Chase titles.</small>
-        </button>
-        <button class="mode-card" data-mode="dynasty">
-          <span class="mode-kicker">BUILD A PROGRAM</span>
-          <strong>DYNASTY</strong>
-          <small>Recruit, develop, score and win championships.</small>
-        </button>
-        <button class="mode-card" data-mode="quick">
-          <span class="mode-kicker">RACE NOW</span>
-          <strong>QUICK MEET</strong>
-          <small>Jump straight into competition.</small>
-        </button>
-        <button class="mode-card" data-mode="championship">
-          <span class="mode-kicker">SURVIVE &amp; ADVANCE</span>
-          <strong>CHAMPIONSHIP</strong>
-          <small>Conference to national final.</small>
-        </button>
+        <button class="mode-card mode-card--hero" data-mode="career"><span class="mode-kicker">LIVE THE JOURNEY</span><strong>CAREER</strong><small>Choose your event group, go to class, train and compete.</small></button>
+        <button class="mode-card" data-mode="quick"><span class="mode-kicker">RACE NOW</span><strong>QUICK MEET</strong><small>Pick an event and start format first.</small></button>
+        <button class="mode-card" data-mode="dynasty"><span class="mode-kicker">BUILD A PROGRAM</span><strong>DYNASTY</strong><small>Program-management mode foundation.</small></button>
+        <button class="mode-card" data-mode="championship"><span class="mode-kicker">SURVIVE &amp; ADVANCE</span><strong>CHAMPIONSHIP</strong><small>Meet scoring, qualifying and finals.</small></button>
       </div>
     </section>
 
-    <section id="career-select" class="screen">
+    <section id="career-select" class="screen overlay-screen">
       <div class="panel panel--wide">
         <button class="text-btn back-btn" data-back="menu">← MAIN MENU</button>
         <div class="eyebrow">CREATE YOUR LEGACY</div>
         <h2>Choose your career path</h2>
-        <p class="muted">Your event group changes training, attributes, season goals and recruiting.</p>
-
+        <p class="muted">Nothing is auto-selected. Your career path determines the events you can choose next.</p>
         <div class="career-grid">
-          <button class="career-card" data-career="Sprints" data-events="60m • 100m • 200m • 400m • Hurdles • Relays">
-            <span>⚡</span><strong>SPRINT CAREER</strong><small>Explosive power, speed endurance and relay pressure.</small>
-          </button>
-          <button class="career-card" data-career="Distance" data-events="XC • 800m • 1500m • Mile • 3K • 5K • 10K">
-            <span>◉</span><strong>DISTANCE CAREER</strong><small>Race tactics, aerobic development and championship kicks.</small>
-          </button>
-          <button class="career-card" data-career="Jumps" data-events="High Jump • Long Jump • Triple Jump • Pole Vault">
-            <span>↗</span><strong>JUMPS CAREER</strong><small>Approach rhythm, technique and explosive precision.</small>
-          </button>
-          <button class="career-card" data-career="Throws" data-events="Shot • Discus • Hammer • Javelin • Weight">
-            <span>●</span><strong>THROWS CAREER</strong><small>Strength, technique and championship-series consistency.</small>
-          </button>
-          <button class="career-card" data-career="Combined Events" data-events="Pentathlon • Heptathlon • Decathlon">
-            <span>★</span><strong>COMBINED EVENTS</strong><small>Master every discipline and manage fatigue across days.</small>
-          </button>
+          <button class="career-card" data-career="Sprints"><span>01</span><strong>SPRINT CAREER</strong><small>100m • 200m • 400m • relays</small></button>
+          <button class="career-card" data-career="Distance"><span>02</span><strong>DISTANCE CAREER</strong><small>800m • 1500m • mile • 3K • 5K • 10K</small></button>
+          <button class="career-card" data-career="Jumps"><span>03</span><strong>JUMPS CAREER</strong><small>LJ • TJ • HJ • pole vault</small></button>
+          <button class="career-card" data-career="Throws"><span>04</span><strong>THROWS CAREER</strong><small>shot • discus • hammer • javelin • weight</small></button>
+          <button class="career-card" data-career="Combined Events"><span>05</span><strong>COMBINED EVENTS</strong><small>pentathlon • heptathlon • decathlon</small></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="event-setup" class="screen overlay-screen">
+      <div class="panel panel--wide setup-panel">
+        <button class="text-btn back-btn" id="back-career">← CAREER PATHS</button>
+        <div class="setup-header">
+          <div><div class="eyebrow">ATHLETE SETUP</div><h2 id="setup-career-name">Distance Career</h2><p id="setup-career-copy" class="muted"></p></div>
+          <label class="name-field">ATHLETE NAME<input id="athlete-name-input" value="Jordan Carter" maxlength="24" /></label>
+        </div>
+        <h3 class="section-title">Choose primary event</h3>
+        <div id="event-options" class="choice-grid"></div>
+        <div id="start-format-wrap" class="setup-block hidden">
+          <h3 class="section-title">Start format</h3>
+          <p class="muted">For the 800m, choose a one-turn stagger or a waterfall start. Other events use their configured meet start.</p>
+          <div id="start-options" class="choice-grid choice-grid--small"></div>
+        </div>
+        <div class="setup-footer">
+          <div id="setup-status" class="muted">Choose an event to continue.</div>
+          <button id="create-career" class="primary-btn" disabled>START CAREER</button>
         </div>
       </div>
     </section>
@@ -83,91 +75,96 @@
     <section id="career-hub" class="screen">
       <div class="hub-shell">
         <header class="hub-header">
-          <div>
-            <div class="eyebrow">CAREER • FRESHMAN</div>
-            <h2 id="hub-athlete">JORDAN CARTER</h2>
-            <p id="hub-event-group" class="muted">DISTANCE • 800m / 1500m</p>
-          </div>
+          <div><div class="eyebrow">CAREER • FRESHMAN</div><h2 id="hub-athlete">JORDAN CARTER</h2><p id="hub-event-group" class="muted">NO EVENT SELECTED</p></div>
+          <div class="hub-currency"><span>PERFORMANCE POINTS</span><strong id="points-readout">300</strong></div>
           <div class="overall-box"><span>OVR</span><strong id="overall-rating">78</strong></div>
         </header>
-
+        <nav class="hub-nav">
+          <button id="hub-home" class="nav-chip active">TODAY</button>
+          <button id="open-classes" class="nav-chip">CLASSES</button>
+          <button id="open-shop" class="nav-chip">PERFORMANCE</button>
+          <button id="change-event" class="nav-chip">EVENT SETUP</button>
+        </nav>
         <div class="hub-grid">
           <div class="hub-card hub-card--schedule">
-            <div class="card-label">TODAY • SATURDAY</div>
+            <div class="card-label">TODAY • MEET DAY</div>
             <h3>NCFA Season Opener</h3>
-            <p>Men's 800m • Heat 1 • 8:42 PM</p>
-            <div class="venue-line">Hawthorne University Track Stadium</div>
-            <button id="race-now" class="primary-btn">RACE 800m</button>
+            <p id="hub-race-line">Choose an event</p>
+            <div class="venue-line">Hawthorne University Track Stadium • Evening session</div>
+            <button id="race-now" class="primary-btn">COMPETE</button>
           </div>
-
           <div class="hub-card">
             <div class="card-label">ATHLETE STATUS</div>
-            <div class="stat-row"><span>Energy</span><strong id="energy-stat">94%</strong></div>
-            <div class="meter"><i style="width:94%"></i></div>
-            <div class="stat-row"><span>Coach Trust</span><strong>62%</strong></div>
-            <div class="meter"><i style="width:62%"></i></div>
-            <div class="stat-row"><span>GPA</span><strong>3.42</strong></div>
+            <div class="stat-row"><span>Energy</span><strong id="energy-stat">94%</strong></div><div class="meter"><i id="energy-meter" style="width:94%"></i></div>
+            <div class="stat-row"><span>Coach Trust</span><strong id="trust-stat">62%</strong></div><div class="meter"><i id="trust-meter" style="width:62%"></i></div>
+            <div class="stat-row"><span>GPA</span><strong id="gpa-stat">3.42</strong></div>
           </div>
-
           <div class="hub-card">
-            <div class="card-label">SEASON BEST</div>
-            <div class="big-time">1:52.84</div>
-            <p class="muted">800 metres</p>
-            <div class="mini-line"><span>PR</span><strong>1:51.92</strong></div>
-            <div class="mini-line"><span>NCFA Rank</span><strong>#38</strong></div>
+            <div class="card-label">ACADEMICS</div>
+            <div class="big-number" id="academic-progress">82%</div>
+            <p class="muted">Eligibility progress</p>
+            <div class="mini-line"><span>Classes today</span><strong id="classes-left">4</strong></div>
+            <div class="mini-line"><span>Status</span><strong id="eligibility-status">ELIGIBLE</strong></div>
           </div>
-
           <div class="hub-card">
-            <div class="card-label">NEXT UP</div>
-            <ul class="agenda">
-              <li><span>MON</span> Recovery + lift</li>
-              <li><span>TUE</span> 5 × 300m race rhythm</li>
-              <li><span>THU</span> Pre-meet</li>
-              <li><span>SAT</span> Capital Invitational</li>
-            </ul>
+            <div class="card-label">SPORT SCIENCE</div>
+            <p class="science-copy">The race model tracks aerobic contribution, phosphocreatine reserve, glycogen, lactate proxy and H+ buffering stress. Lactate itself is not treated as the cause of fatigue.</p>
+            <div class="mini-line"><span>Inventory</span><strong id="inventory-count">0 items</strong></div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section id="classes-screen" class="screen overlay-screen">
+      <div class="panel panel--wide">
+        <button class="text-btn back-hub">← CAREER HUB</button>
+        <div class="eyebrow">STUDENT-ATHLETE</div><h2>Today's classes</h2>
+        <p class="muted">Attendance and academic progress affect eligibility. Chemistry also unlocks sport-science notes.</p>
+        <div id="class-list" class="class-list"></div>
+      </div>
+    </section>
+
+    <section id="shop-screen" class="screen overlay-screen">
+      <div class="panel panel--wide">
+        <button class="text-btn back-hub">← CAREER HUB</button>
+        <div class="shop-head"><div><div class="eyebrow">PERFORMANCE CENTER</div><h2>Sports nutrition &amp; recovery</h2></div><div class="shop-points">POINTS <strong id="shop-points">300</strong></div></div>
+        <p class="muted disclaimer">These are fictionalized game effects, not real-world supplement or dosing guidance.</p>
+        <div id="shop-list" class="shop-grid"></div>
       </div>
     </section>
 
     <section id="race-hud" class="screen race-screen">
+      <div id="starter-overlay" class="starter-overlay"><div id="starter-command">ON YOUR MARKS</div><small id="starter-detail"></small></div>
       <div class="race-topbar">
-        <div><span class="hud-label">MEN'S 800m</span><strong id="race-clock">0:00.00</strong></div>
+        <div><span class="hud-label" id="race-event-label">MEN'S 800m</span><strong id="race-clock">0:00.00</strong></div>
         <div><span class="hud-label">PLACE</span><strong id="place-readout">1 / 8</strong></div>
         <div><span class="hud-label">DISTANCE</span><strong id="distance-readout">0 / 800m</strong></div>
+        <div><span class="hud-label">START</span><strong id="start-type-readout">ONE-TURN</strong></div>
       </div>
-
+      <div class="science-hud">
+        <div class="science-title">SPORT SCIENCE LIVE</div>
+        <div class="science-row"><span>PCr reserve</span><b id="pcr-value">100%</b></div><div class="science-bar"><i id="pcr-bar"></i></div>
+        <div class="science-row"><span>Glycogen</span><b id="glycogen-value">100%</b></div><div class="science-bar"><i id="glycogen-bar"></i></div>
+        <div class="science-row"><span>Lactate proxy</span><b id="lactate-value">1.2</b></div><div class="science-bar science-bar--hot"><i id="lactate-bar"></i></div>
+        <div class="science-row"><span>H+ / buffer stress</span><b id="buffer-value">0%</b></div><div class="science-bar science-bar--hot"><i id="buffer-bar"></i></div>
+        <small>Lactate is modeled as a workload marker, not the direct cause of fatigue.</small>
+      </div>
       <div class="race-bottom">
-        <div class="effort-wrap">
-          <div class="hud-label">EFFORT</div>
-          <div class="effort-meter"><i id="effort-fill"></i><b id="effort-marker"></b></div>
-          <div class="effort-labels"><span>RELAX</span><span>RACE</span><span>KICK</span></div>
-        </div>
-        <div class="controls-card">
-          <strong>CONTROLS</strong>
-          <span>W / ↑ increase effort</span>
-          <span>S / ↓ relax</span>
-          <span>A / D move out / in</span>
-          <span>SPACE surge</span>
-        </div>
+        <div class="effort-wrap"><div class="hud-label">EFFORT</div><div class="effort-meter"><i id="effort-fill"></i><b id="effort-marker"></b></div><div class="effort-labels"><span>RELAX</span><span>RACE</span><span>KICK</span></div></div>
+        <div class="controls-card"><strong>CONTROLS</strong><span>W / ↑ increase effort</span><span>S / ↓ relax</span><span>A / D move out / in after break</span><span>SPACE surge</span></div>
       </div>
-
       <div id="split-toast" class="split-toast">400m • 56.21</div>
     </section>
 
-    <section id="results-screen" class="screen">
+    <section id="results-screen" class="screen overlay-screen">
       <div class="panel results-panel">
-        <div class="eyebrow">OFFICIAL RESULTS</div>
-        <h2>MEN'S 800m • FINAL</h2>
+        <div class="eyebrow">OFFICIAL RESULTS</div><h2 id="results-title">MEN'S 800m • FINAL</h2>
+        <div id="result-reward" class="reward-banner"></div>
         <div id="results-list" class="results-list"></div>
-        <div class="result-actions">
-          <button id="return-hub" class="primary-btn">CONTINUE CAREER</button>
-          <button id="race-again" class="secondary-btn">RACE AGAIN</button>
-        </div>
+        <div class="result-actions"><button id="return-hub" class="primary-btn">CONTINUE CAREER</button><button id="race-again" class="secondary-btn">RACE AGAIN</button></div>
       </div>
     </section>
   </div>
-
   <script type="module" src="./src/game.js"></script>
 </body>
 </html>
