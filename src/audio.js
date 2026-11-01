@@ -98,8 +98,10 @@ export class GameAudio {
 
   stopSpeech() {
     if (this.activeSpeech) {
-      this.activeSpeech.pause();
-      this.activeSpeech.currentTime = 0;
+      const clip = this.activeSpeech;
+      clip.pause();
+      clip.currentTime = 0;
+      clip.dispatchEvent(new Event('ended'));
       this.activeSpeech = null;
     }
     this.speechChain = Promise.resolve();
