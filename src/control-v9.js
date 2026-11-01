@@ -47,7 +47,6 @@ function desiredOutputRate() {
   const base = targetCadence();
   if (floatMode) return base * 0.80;
   const requested = physicalRate();
-  // Anything above this used to cost energy without adding useful speed.
   return Math.max(base * 0.56, Math.min(requested, base * 1.16));
 }
 
@@ -127,8 +126,6 @@ window.addEventListener('keyup', (event) => {
   }
 }, true);
 
-// While FLOAT is held on touch devices, suppress the normal PACE/PUSH cadence
-// and feed the race engine a controlled economical rhythm instead.
 window.addEventListener('keydown', (event) => {
   if (!touchDevice || !floatMode || emitting) return;
   if (event.code === 'KeyQ' || event.code === 'KeyP') {
@@ -139,13 +136,12 @@ window.addEventListener('keydown', (event) => {
 
 function patchLabels() {
   const guide = document.querySelector('.tap-guide strong');
-  if (guide) guide.textContent = 'ALTERNATE Q / E';
+  if (guide && guide.textContent !== 'ALTERNATE Q / E') guide.textContent = 'ALTERNATE Q / E';
   const copy = document.querySelector('.tap-guide span');
-  if (copy) copy.textContent = 'Faster Q / E rhythm = more drive. Hold F to FLOAT and settle without shutting down.';
+  const copyText = 'Faster Q / E rhythm = more drive. Hold F to FLOAT and settle without shutting down.';
+  if (copy && copy.textContent !== copyText) copy.textContent = copyText;
   const eLight = document.querySelector('#p-light');
-  if (eLight) eLight.textContent = 'E';
-  const controls = document.querySelector('.controls-card');
-  if (controls) controls.innerHTML = '<span>A / D move out / in after break</span><span>F hold FLOAT • SPACE surge</span>';
+  if (eLight && eLight.textContent !== 'E') eLight.textContent = 'E';
 
   if (!document.querySelector('#float-indicator')) {
     const indicator = document.createElement('div');
@@ -153,16 +149,14 @@ function patchLabels() {
     indicator.textContent = 'FLOAT — SETTLED RHYTHM';
     document.querySelector('#race-hud')?.appendChild(indicator);
   }
-
-  document.querySelectorAll('.is-copy').forEach((node) => {
-    node.textContent = node.textContent.replaceAll('Q / P', 'Q / E').replaceAll('Q/P', 'Q/E');
-  });
 }
 
 function patchTouchFloat() {
-  if (!touchDevice) return;
+  if (!touchDevice) return true;
   const row = document.querySelector('#touch-race-controls .touch-stride-row');
-  if (!row || document.querySelector('#touch-float')) return;
+  if (!row) return false;
+  if (document.querySelector('#touch-float')) return true;
+
   const button = document.createElement('button');
   button.id = 'touch-float';
   button.className = 'touch-kick touch-float';
@@ -174,6 +168,7 @@ function patchTouchFloat() {
   button.addEventListener('pointercancel', end);
   button.addEventListener('lostpointercapture', end);
   row.insertBefore(button, row.children[1] || null);
+  return true;
 }
 
 const style = document.createElement('style');
@@ -186,7 +181,18 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// One-time setup only. The old full-document MutationObserver rewrote the DOM
+// from inside its own callback, causing a feedback loop and browser stalls.
 patchLabels();
-const observer = new MutationObserver(() => { patchLabels(); patchTouchFloat(); });
-observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-setInterval(patchTouchFloat, 300);
+
+// Mobile controls are created by a later optional module, so retry only for a
+// short bounded window instead of polling forever.
+if (touchDevice && !patchTouchFloat()) {
+  let attempts = 0;
+  const retry = setInterval(() => {
+    attempts += 1;
+    if (patchTouchFloat() || attempts >= 24) clearInterval(retry);
+  }, 250);
+}
+
+window.__NCFA_CONTROL_READY = true;
