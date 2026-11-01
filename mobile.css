@@ -125,6 +125,67 @@
 
   .panel, .menu-screen, .hub-screen { -webkit-overflow-scrolling: touch; }
   .career-card, .choice-card, .mode-card, .nav-chip, .primary-btn, .secondary-btn { min-height: 52px; }
+
+  /* Keep gameplay gestures locked, but let all non-game screens scroll normally. */
+  html, body {
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+
+  #app {
+    height: 100dvh;
+    min-height: 100svh;
+    touch-action: pan-y;
+    overscroll-behavior: none;
+  }
+
+  #game-canvas,
+  .race-screen,
+  .field-screen,
+  .cinematic-screen,
+  .touch-race-controls,
+  .touch-field-controls,
+  .pace-choice {
+    touch-action: none;
+  }
+
+  .menu-screen,
+  .hub-screen,
+  .overlay-screen,
+  .panel,
+  .menu-grid,
+  .career-grid,
+  .choice-grid,
+  .hub-grid,
+  .list-grid,
+  .shop-grid,
+  .results-panel {
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hub-nav {
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+  }
+
+  .menu-screen,
+  .hub-screen,
+  .overlay-screen {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  button,
+  .career-card,
+  .choice-card,
+  .mode-card,
+  .nav-chip,
+  .primary-btn,
+  .secondary-btn {
+    touch-action: manipulation;
+  }
 }
 
 @media (pointer: coarse) and (max-width: 699px) {
@@ -166,6 +227,37 @@
   .result-time { font-size: 15px !important; }
   .result-actions { position: sticky; bottom: 0; background: var(--panel); padding-top: 8px; }
   .result-actions button { flex:1; }
+
+  /* Phone layouts should use the full dynamic viewport and remain fully reachable. */
+  .menu-screen,
+  .hub-screen {
+    min-height: 100%;
+    height: 100%;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .menu-grid,
+  .hub-grid,
+  .career-grid {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .menu-grid {
+    margin-top: clamp(72px, 14vh, 130px);
+    margin-bottom: 0;
+  }
+
+  .hub-shell {
+    margin-top: max(58px, env(safe-area-inset-top));
+    margin-bottom: max(16px, env(safe-area-inset-bottom));
+    flex: 0 0 auto;
+  }
+
+  .panel {
+    max-height: calc(100dvh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+  }
 }
 
 @media (pointer: coarse) and (min-width: 700px) {
