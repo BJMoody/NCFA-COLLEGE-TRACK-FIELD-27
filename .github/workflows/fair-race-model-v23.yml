@@ -1,0 +1,53 @@
+name: Apply fair race model v23
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fair-race-model-v23.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch race model
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/game.js')
+          s = p.read_text()
+
+          old = """function createRaceRunners(event) {\n  const effects = supplementEffects();\n  const playerRating = currentPlayerRating();\n  const offsets = [0, 0.7, -0.5, 0.25, 1.05, -0.25, -0.85, 0.55];\n  return ROSTER.map((seed, i) => {\n    const config = { ...seed, rating: seed.player ? playerRating : playerRating + (offsets[i] ?? 0) };\n"""
+          new = """function createRaceRunners(event) {\n  const effects = supplementEffects();\n  const playerRating = currentPlayerRating();\n  return ROSTER.map((seed, i) => {\n    // Opponents keep their real roster ratings. They no longer scale to the\n    // player's current rating, so player development actually creates separation.\n    const config = { ...seed, rating: seed.player ? playerRating : seed.rating };\n"""
+          if old not in s:
+              raise SystemExit('createRaceRunners pattern not found')
+          s = s.replace(old, new, 1)
+
+          old = "const fitnessFactor = 1 + (config.rating - playerRating) * 0.0032 + (dayForm - 1) * 0.65 + heatBias;"
+          new = "const fitnessFactor = 1 + (config.rating - playerRating) * 0.0058 + (dayForm - 1) * 0.65 + heatBias;"
+          if old not in s:
+              raise SystemExit('fitnessFactor pattern not found')
+          s = s.replace(old, new, 1)
+
+          old = "paceFactor = 0.94 + effort * 0.075;"
+          new = "paceFactor = 0.925 + effort * 0.075;"
+          if old not in s:
+              raise SystemExit('AI paceFactor pattern not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+          node --check src/game.js
+      - name: Commit patch and remove workflow
+        run: |
+          rm .github/workflows/fair-race-model-v23.yml
+          git config user.name "Brandon"
+          git config user.email "brandon@amm.lol"
+          git add src/game.js .github/workflows/fair-race-model-v23.yml
+          git commit -m "Make race fields fair and rating-based"
+          git push
