@@ -4,29 +4,20 @@ const bootStatus = bootScreen?.querySelector('small');
 
 let loading = false;
 let ready = false;
-let perfPromise = null;
 let uiPromise = null;
-
-function installMockupSkin() {
-  if (!document.querySelector('link[data-ncfa-v11]')) {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = './mockup-v11.css';
-    link.dataset.ncfaV11 = '1';
-    document.head.appendChild(link);
-  }
-  if (!uiPromise) uiPromise = import('./ui-v11.js').catch((error) => console.warn('NCFA UI skin failed softly', error));
-  return uiPromise;
-}
-
-installMockupSkin();
+let perfPromise = null;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
   window.NCFA_UI_V11?.setLoading?.(text);
 }
 
-function primeRendererModule() {
+function loadUi() {
+  if (!uiPromise) uiPromise = import('./ui-v11.js').catch((error) => console.warn('NCFA UI extras failed softly', error));
+  return uiPromise;
+}
+
+function loadPerformanceGovernor() {
   if (!perfPromise) perfPromise = import('./perf-v10.js');
   return perfPromise;
 }
@@ -50,8 +41,8 @@ async function importFastCoreGame() {
   ]);
   for (const [from, to] of imports) source = source.split(from).join(to);
 
-  // Do not build a full stadium while the title/menu/career screens are loading.
-  // The real 3D world is created only when startRace/startField calls loadWorld().
+  // Never construct a stadium on title/menu/career screens. The 3D world is
+  // created only when the player starts a race or field event.
   source = source.replace('\nloadWorld(venue);\n\nfunction renderCareers()', '\n\nfunction renderCareers()');
   source = source.replace(
     "if (state.venueId) venue = VENUES.find((v) => v.id === state.venueId) || venue;\n    loadWorld(venue);",
@@ -67,7 +58,7 @@ async function importFastCoreGame() {
     "world?.setCrowdReaction('idle');\n  if (world) { world.dispose(); world = null; }\n  window.__NCFA_RACE_PHASE = 'idle';"
   );
 
-  const blob = new Blob([source, '\n//# sourceURL=ncfa-game-v11.js'], { type: 'text/javascript' });
+  const blob = new Blob([source, '\n//# sourceURL=ncfa-game-v12.js'], { type: 'text/javascript' });
   const blobUrl = URL.createObjectURL(blob);
   try {
     await import(blobUrl);
@@ -84,13 +75,19 @@ async function loadGame() {
   enterButton.textContent = 'LOADING GAME…';
   setStatus('Preparing the race engine…');
   document.documentElement.classList.add('ncfa-loading');
-  window.NCFA_UI_V11?.showLoading?.('Preparing the race engine…');
 
-  // Guarantee the loading screen gets a paint before module parsing / WebGL work.
+  // Let the button/loading state paint before any module/network/WebGL work.
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   try {
-    await Promise.allSettled([installMockupSkin(), primeRendererModule()]);
+    // These do not begin until the player explicitly presses ENTER.
+    const [uiResult, perfResult] = await Promise.allSettled([
+      loadUi(),
+      loadPerformanceGovernor()
+    ]);
+    if (uiResult.status === 'rejected') console.warn('UI enhancement load failed', uiResult.reason);
+    if (perfResult.status === 'rejected') console.warn('Performance governor load failed', perfResult.reason);
+    window.NCFA_UI_V11?.showLoading?.('Loading career and race systems…');
 
     setStatus('Loading career and race systems…');
     try {
@@ -121,7 +118,7 @@ async function loadGame() {
     setStatus('Ready');
     window.NCFA_UI_V11?.hideLoading?.();
 
-    // game.js installs the real Enter handler during import.
+    // game.js installs its normal Enter handler during import.
     enterButton.click();
   } catch (error) {
     console.error('NCFA bootstrap failed', error);
@@ -141,8 +138,5 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// Warm only the renderer after first paint. The stadium itself is deliberately
-// not constructed until an event actually begins.
-const warm = () => primeRendererModule().catch(() => {});
-if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 2200 });
-else setTimeout(warm, 1100);
+// IMPORTANT: intentionally no requestIdleCallback, prefetch, Three.js import,
+// MutationObserver setup, polling, or WebGL work before ENTER GAME is pressed.
