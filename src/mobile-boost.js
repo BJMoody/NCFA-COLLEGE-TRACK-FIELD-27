@@ -1,3 +1,5 @@
+import './pace-choice.js';
+
 const touchDevice = navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
 
 if (touchDevice) {
