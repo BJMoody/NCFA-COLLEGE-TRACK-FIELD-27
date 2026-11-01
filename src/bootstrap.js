@@ -6,9 +6,6 @@ let loading = false;
 let ready = false;
 let enhancementIndex = 0;
 let enhancementsStarted = false;
-let raceControlsReady = false;
-let raceControlsAttempted = false;
-let startingEvent = false;
 window.__NCFA_CONTROL_V9_READY = false;
 
 function setStatus(text) {
@@ -37,13 +34,9 @@ const enhancementModules = [
 ];
 
 async function loadEnhancement(path) {
-  if (path === './control-v9.js') raceControlsAttempted = true;
   try {
     await import(path);
-    if (path === './control-v9.js') {
-      raceControlsReady = true;
-      window.__NCFA_CONTROL_V9_READY = true;
-    }
+    if (path === './control-v9.js') window.__NCFA_CONTROL_V9_READY = true;
     return true;
   } catch (error) {
     console.warn(`Optional NCFA module failed softly: ${path}`, error);
@@ -61,7 +54,6 @@ function scheduleEnhancementStep(delay = 0) {
 
       const path = enhancementModules[enhancementIndex++];
       await loadEnhancement(path);
-
       requestAnimationFrame(() => requestAnimationFrame(() => scheduleEnhancementStep(0)));
     };
 
@@ -92,32 +84,6 @@ function installMeetSetupTrigger() {
   check();
 }
 
-function installStartEventGuard() {
-  const button = document.querySelector('#start-meet');
-  if (!button) return;
-
-  button.addEventListener('click', async (event) => {
-    if (startingEvent || raceControlsReady || raceControlsAttempted) return;
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    startingEvent = true;
-    const oldText = button.textContent;
-    button.disabled = true;
-    button.textContent = 'PREPARING EVENT…';
-
-    await loadEnhancement('./control-v9.js');
-
-    button.disabled = false;
-    button.textContent = oldText || 'START EVENT';
-    startingEvent = false;
-
-    // Whether the enhancement succeeded or not, do not retry forever. The
-    // minimal start-controls module provides a Q/E fallback.
-    setTimeout(() => button.click(), 0);
-  }, true);
-}
-
 async function loadGame() {
   if (loading || ready) return;
   loading = true;
@@ -134,6 +100,7 @@ async function loadGame() {
     await import('./audio-safety-v16.js');
     await import('./start-controls-v16.js');
     await import('./game.js');
+    await import('./pace-choice.js');
 
     ready = true;
     loading = false;
@@ -144,7 +111,6 @@ async function loadGame() {
 
     showMenuImmediately();
     installMeetSetupTrigger();
-    installStartEventGuard();
   } catch (error) {
     console.error('NCFA core load failed', error);
     loading = false;
@@ -162,5 +128,5 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// Zero Three/WebGL work before ENTER. Setup screens remain HTML-only. START EVENT
-// has hard guards against stalled audio, missing controls, and retry deadlocks.
+// START EVENT is intentionally not intercepted here. The core game owns that
+// button so a race can never be blocked by optional module loading.
