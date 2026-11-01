@@ -47,7 +47,6 @@ function scheduleEnhancementStep(delay = 0) {
         console.warn(`Optional NCFA module failed softly: ${path}`, error);
       }
 
-      // Never parse several optional modules in the same frame.
       requestAnimationFrame(() => requestAnimationFrame(() => scheduleEnhancementStep(0)));
     };
 
@@ -90,9 +89,9 @@ async function loadGame() {
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   try {
-    // Load the renderer guard before game.js creates its WebGLRenderer.
-    // This guarantees career/event/meet setup screens never draw WebGL frames.
+    // Guards must exist before game.js creates the renderer/audio instances.
     await import('./perf-v10.js');
+    await import('./audio-safety-v16.js');
     await import('./game.js');
 
     ready = true;
