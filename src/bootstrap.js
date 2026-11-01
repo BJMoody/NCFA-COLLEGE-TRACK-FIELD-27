@@ -6,6 +6,8 @@ let loading = false;
 let ready = false;
 let enhancementIndex = 0;
 let enhancementsStarted = false;
+let raceControlsReady = false;
+let startingEvent = false;
 
 function setStatus(text) {
   if (bootStatus) bootStatus.textContent = text;
@@ -32,6 +34,15 @@ const enhancementModules = [
   './ui-v11.js'
 ];
 
+async function loadEnhancement(path) {
+  try {
+    await import(path);
+    if (path === './control-v9.js') raceControlsReady = true;
+  } catch (error) {
+    console.warn(`Optional NCFA module failed softly: ${path}`, error);
+  }
+}
+
 function scheduleEnhancementStep(delay = 0) {
   if (!enhancementsStarted || enhancementIndex >= enhancementModules.length) return;
 
@@ -41,11 +52,7 @@ function scheduleEnhancementStep(delay = 0) {
       if (competitionActive()) return;
 
       const path = enhancementModules[enhancementIndex++];
-      try {
-        await import(path);
-      } catch (error) {
-        console.warn(`Optional NCFA module failed softly: ${path}`, error);
-      }
+      await loadEnhancement(path);
 
       requestAnimationFrame(() => requestAnimationFrame(() => scheduleEnhancementStep(0)));
     };
@@ -77,6 +84,33 @@ function installMeetSetupTrigger() {
   check();
 }
 
+function installStartEventGuard() {
+  const button = document.querySelector('#start-meet');
+  if (!button) return;
+
+  button.addEventListener('click', async (event) => {
+    if (startingEvent || raceControlsReady) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    startingEvent = true;
+    const oldText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'PREPARING EVENT…';
+
+    // Q/E race controls are critical, not optional. Guarantee them before the
+    // core START EVENT handler is allowed to run.
+    await loadEnhancement('./control-v9.js');
+
+    button.disabled = false;
+    button.textContent = oldText || 'START EVENT';
+    startingEvent = false;
+
+    // Re-enter after this capture handler has released the original click.
+    setTimeout(() => button.click(), 0);
+  }, true);
+}
+
 async function loadGame() {
   if (loading || ready) return;
   loading = true;
@@ -89,9 +123,10 @@ async function loadGame() {
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   try {
-    // Guards must exist before game.js creates the renderer/audio instances.
+    // These guards must exist before game.js creates renderer/audio/start state.
     await import('./perf-v10.js');
     await import('./audio-safety-v16.js');
+    await import('./start-controls-v16.js');
     await import('./game.js');
 
     ready = true;
@@ -103,6 +138,7 @@ async function loadGame() {
 
     showMenuImmediately();
     installMeetSetupTrigger();
+    installStartEventGuard();
   } catch (error) {
     console.error('NCFA core load failed', error);
     loading = false;
@@ -120,5 +156,5 @@ enterButton?.addEventListener('click', (event) => {
   loadGame();
 }, true);
 
-// Zero Three/WebGL work before ENTER. After ENTER, setup screens are HTML-only;
-// race-specific modules begin staging only when MEET SETUP actually opens.
+// Zero Three/WebGL work before ENTER. Setup screens remain HTML-only. START EVENT
+// now has hard guards against stalled audio and missing Q/E control modules.
