@@ -1,7 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { CAREERS, EVENTS, EVENT_STARTS, VENUES, PLACE_POINTS, TEAM_POINTS, CLASSES, PRACTICES, SHOP_ITEMS, ROSTER, defaultCareerState } from './data.js';
 import { createAthlete, animateAthlete } from './athlete.js';
-import { createWorld, stadiumPoint, INNER_RADIUS, OUTER_RADIUS, LANE_WIDTH, LAP, CHUTE_Z } from './world.js';
+import { createWorld, stadiumPoint, eventStartBase, INNER_RADIUS, LANE_WIDTH, CHUTE_Z } from './world.js';
 import { GameAudio, AUDIO, delay } from './audio.js';
 import { CommentaryDirector } from './commentary.js';
 
@@ -242,7 +242,6 @@ function choosePaceTarget(event) {
 }
 
 function prepareMeet() {
-  // Heat quality is intentionally tight. A strong heat should be a challenge, not a hidden speed cheat.
   meetContext.heatStrength = 0.992 + Math.random() * 0.020;
   meetContext.form = 0.987 + Math.random() * 0.026;
   meetContext.pacer = null;
@@ -316,7 +315,7 @@ function createRaceRunners(event) {
       halfway: null,
       dropped: false,
       contactPenalty: 0,
-      startOffset: seed.player ? 2.6 : 0.55
+      startOffset: seed.player ? 2.6 : 0
     };
   });
 }
@@ -352,43 +351,43 @@ function tapRate() {
   return span > 0 ? (tapTimes.length - 1) / span : 0;
 }
 
-function startCourseFor(r) {
+function startStaggerFor(r) {
+  if (state.event === '100m') return 0;
   const cfg = EVENT_STARTS[state.event];
-  if (!cfg || state.event === '100m') return 0;
+  if (!cfg) return 0;
   if (cfg.type === 'stagger' || (state.event === '800m' && state.startFormat === 'One-Turn Stagger')) {
-    return cfg.base + (r.lane - 1) * cfg.stagger;
+    return (r.lane - 1) * cfg.stagger;
   }
-  const arcOffset = (r.startLaneFloat - 1) * 0.62;
-  return cfg.base + arcOffset;
+  return (r.startLaneFloat - 1) * 0.62;
+}
+
+function staggerDecayDistance() {
+  if (state.event === '800m' && state.startFormat === 'One-Turn Stagger') return race.event.breakDistance || 100;
+  if (race.event.laneRules === 'lanes') return race.event.distance;
+  return Math.min(90, race.event.distance * 0.12);
 }
 
 function pathForRunner(r) {
   if (state.event === '100m') {
     const laneZ = CHUTE_Z - LANE_WIDTH * 4 + (r.lane - 0.5) * LANE_WIDTH;
     const x = -50 + r.distance - (r.startOffset || 0);
-    return {
-      p: new THREE.Vector3(x, 0.08, laneZ),
-      ahead: new THREE.Vector3(x + 1.0, 0.08, laneZ),
-      lane: r.laneFloat
-    };
+    return { p: new THREE.Vector3(x, 0.08, laneZ), ahead: new THREE.Vector3(x + 1.0, 0.08, laneZ), lane: r.laneFloat };
   }
 
-  const baseCourse = startCourseFor(r);
-  const course = baseCourse + r.distance - (r.startOffset || 0);
+  const base = eventStartBase(state.event);
+  const stagger = startStaggerFor(r);
+  const decayAt = Math.max(1, staggerDecayDistance());
+  const staggerFactor = 1 - THREE.MathUtils.clamp(r.distance / decayAt, 0, 1);
+  const course = base + r.distance + stagger * staggerFactor - (r.startOffset || 0);
   let lane = r.laneFloat;
   if (race.event.laneRules === 'lanes') lane = r.lane;
   if (state.event === '800m' && state.startFormat === 'One-Turn Stagger' && r.distance < (race.event.breakDistance || 100)) lane = r.lane;
   const radius = INNER_RADIUS + (lane - 0.5) * LANE_WIDTH;
-  return {
-    p: stadiumPoint(course, radius),
-    ahead: stadiumPoint(course + 0.9, radius),
-    lane
-  };
+  return { p: stadiumPoint(course, radius), ahead: stadiumPoint(course + 0.9, radius), lane };
 }
 
 function orientRunner(mesh, p, ahead) {
   mesh.lookAt(ahead.x, p.y, ahead.z);
-  // The procedural athlete's chest is modeled on -Z; rotate once so motion and body face agree.
   mesh.rotateY(Math.PI);
 }
 
@@ -409,11 +408,7 @@ function ensureStartUi() {
   panel.innerHTML = '<div class="is-title"></div><div class="is-copy"></div><div class="is-progress"><i></i></div><button class="is-action"></button>';
   $('#race-hud').appendChild(panel);
   const style = document.createElement('style');
-  style.textContent = `
-    #interactive-start{position:absolute;left:50%;bottom:18%;transform:translateX(-50%);z-index:45;width:min(430px,88vw);padding:14px 16px;background:rgba(5,7,10,.94);border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(9px);text-align:center;pointer-events:auto;display:none;color:#fff}
-    #interactive-start.show{display:block}.is-title{font:900 26px/1 'Barlow Condensed',Arial,sans-serif;color:#f1c40f;letter-spacing:.04em}.is-copy{font-size:12px;color:#c7ced7;margin:7px 0 10px}.is-progress{height:5px;background:rgba(255,255,255,.1);margin:8px 0 10px}.is-progress i{display:block;height:100%;width:0;background:#f1c40f}.is-action{width:100%;min-height:52px;border:0;background:#f1c40f;color:#171307;font-weight:900;touch-action:manipulation}
-    @media(max-width:700px){#interactive-start{bottom:27%}.is-action{min-height:60px;font-size:16px}}
-  `;
+  style.textContent = `#interactive-start{position:absolute;left:50%;bottom:18%;transform:translateX(-50%);z-index:45;width:min(430px,88vw);padding:14px 16px;background:rgba(5,7,10,.94);border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(9px);text-align:center;pointer-events:auto;display:none;color:#fff}#interactive-start.show{display:block}.is-title{font:900 26px/1 'Barlow Condensed',Arial,sans-serif;color:#f1c40f;letter-spacing:.04em}.is-copy{font-size:12px;color:#c7ced7;margin:7px 0 10px}.is-progress{height:5px;background:rgba(255,255,255,.1);margin:8px 0 10px}.is-progress i{display:block;height:100%;width:0;background:#f1c40f}.is-action{width:100%;min-height:52px;border:0;background:#f1c40f;color:#171307;font-weight:900;touch-action:manipulation}@media(max-width:700px){#interactive-start{bottom:27%}.is-action{min-height:60px;font-size:16px}}`;
   document.head.appendChild(style);
   return panel;
 }
@@ -429,9 +424,7 @@ function showStartUi(title, copy, action, progress = 1) {
   return panel;
 }
 
-function hideStartUi() {
-  $('#interactive-start')?.classList.remove('show');
-}
+function hideStartUi() { $('#interactive-start')?.classList.remove('show'); }
 
 function walkPlayerToMark() {
   startState.phase = 'walk';
@@ -482,24 +475,11 @@ function waitForReady(blocks) {
   startState.phase = 'ready';
   window.__NCFA_RACE_PHASE = 'ready';
   return new Promise((resolve) => {
-    const panel = showStartUi(
-      blocks ? 'GET INTO THE BLOCKS' : 'SETTLE AT THE LINE',
-      blocks ? 'Press SPACE / ENTER or tap READY once you are set in the blocks.' : 'Press SPACE / ENTER or tap READY when you are balanced and still.',
-      blocks ? 'READY IN BLOCKS' : 'READY AT LINE',
-      1
-    );
-    const done = (e) => {
-      e?.preventDefault?.();
-      e?.stopImmediatePropagation?.();
-      cleanup();
-      resolve();
-    };
+    const panel = showStartUi(blocks ? 'GET INTO THE BLOCKS' : 'SETTLE AT THE LINE', blocks ? 'Press SPACE / ENTER or tap READY once you are set in the blocks.' : 'Press SPACE / ENTER or tap READY when you are balanced and still.', blocks ? 'READY IN BLOCKS' : 'READY AT LINE', 1);
+    const done = (e) => { e?.preventDefault?.(); e?.stopImmediatePropagation?.(); cleanup(); resolve(); };
     const key = (e) => { if (e.code === 'Space' || e.code === 'Enter') done(e); };
     const click = (e) => done(e);
-    const cleanup = () => {
-      window.removeEventListener('keydown', key, true);
-      panel.querySelector('.is-action').removeEventListener('pointerdown', click);
-    };
+    const cleanup = () => { window.removeEventListener('keydown', key, true); panel.querySelector('.is-action').removeEventListener('pointerdown', click); };
     window.addEventListener('keydown', key, true);
     panel.querySelector('.is-action').addEventListener('pointerdown', click);
   });
@@ -513,12 +493,7 @@ function waitForGunWindow(ms) {
   panel.querySelector('.is-action').disabled = true;
   return new Promise((resolve) => {
     let settled = false;
-    const done = (value) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(value);
-    };
+    const done = (value) => { if (settled) return; settled = true; cleanup(); resolve(value); };
     const key = (e) => {
       if (['KeyQ', 'KeyP', 'Space'].includes(e.code)) {
         e.preventDefault();
@@ -531,11 +506,7 @@ function waitForGunWindow(ms) {
       if (control) done('false');
     };
     const timer = setTimeout(() => done('gun'), ms);
-    const cleanup = () => {
-      clearTimeout(timer);
-      window.removeEventListener('keydown', key, true);
-      document.removeEventListener('pointerdown', touch, true);
-    };
+    const cleanup = () => { clearTimeout(timer); window.removeEventListener('keydown', key, true); document.removeEventListener('pointerdown', touch, true); };
     window.addEventListener('keydown', key, true);
     document.addEventListener('pointerdown', touch, true);
   });
@@ -544,12 +515,7 @@ function waitForGunWindow(ms) {
 async function runStartProcedure() {
   const blocks = race.event.start === 'blocks';
   const format = state.startFormat || 'Standard';
-  const instructionFile = format === 'One-Turn Stagger'
-    ? 'officials/one_turn_instructions_01.mp3'
-    : format === 'Waterfall'
-      ? 'officials/waterfall_instructions_01.mp3'
-      : 'officials/lane_instructions_01.mp3';
-
+  const instructionFile = format === 'One-Turn Stagger' ? 'officials/one_turn_instructions_01.mp3' : format === 'Waterfall' ? 'officials/waterfall_instructions_01.mp3' : 'officials/lane_instructions_01.mp3';
   $('#starter-command').textContent = 'OFFICIAL INSTRUCTIONS';
   $('#starter-detail').textContent = `${state.event} • ${format}`;
   await audio.queueSpeech(instructionFile);
@@ -561,12 +527,10 @@ async function runStartProcedure() {
     $('#starter-detail').textContent = `${state.event} • ${format}`;
     await audio.queueSpeech(blocks ? 'officials/on_your_marks_blocks_01.mp3' : 'officials/on_your_marks_standing_01.mp3');
     await waitForReady(blocks);
-
     if (blocks) {
       $('#starter-command').textContent = 'SET';
       await audio.queueSpeech('officials/set_01.mp3');
     }
-
     const result = await waitForGunWindow((blocks ? 650 : 520) + Math.random() * (blocks ? 1200 : 1450));
     if (result === 'false') {
       hideStartUi();
@@ -576,7 +540,6 @@ async function runStartProcedure() {
       await delay(800);
       return attemptStart();
     }
-
     hideStartUi();
     $('#starter-command').textContent = '';
     $('#starter-detail').textContent = '';
@@ -588,7 +551,6 @@ async function runStartProcedure() {
     audio.startFootsteps();
     setMode('race', 'race-hud');
   };
-
   return attemptStart();
 }
 
@@ -653,8 +615,7 @@ function startCompetition() {
   state.venueId = venue.id;
   state.meetNumber += 1;
   persist();
-  if (EVENTS[state.event].kind === 'race') startRace();
-  else startField();
+  if (EVENTS[state.event].kind === 'race') startRace(); else startField();
 }
 
 function updateRaceLabels() {
@@ -671,27 +632,46 @@ function boxed(r) {
   return race.runners.some((o) => o !== r && o.finishTime == null && o.distance > r.distance && o.distance - r.distance < 1.25 && Math.abs(o.laneFloat - r.laneFloat) < 0.42);
 }
 
+function draftingBonus(r) {
+  if (!race || race.event.laneRules === 'lanes' || race.event.laneRules === 'straight-lanes') return 0;
+  let bonus = 0;
+  for (const o of race.runners) {
+    if (o === r || o.finishTime != null || o.dropped) continue;
+    const gap = o.distance - r.distance;
+    const laneGap = Math.abs(o.laneFloat - r.laneFloat);
+    if (gap >= 0.65 && gap <= 2.8 && laneGap <= 0.62) {
+      const centered = 1 - Math.abs(gap - 1.45) / 1.35;
+      bonus = Math.max(bonus, 0.006 + Math.max(0, centered) * 0.007);
+    }
+  }
+  return bonus;
+}
+
 function updateScience(r, effort, dt) {
   const fx = supplementEffects();
   const s = r.science;
   const sprint = race.event.distance <= 400;
   const high = Math.max(0, effort - 0.82);
   const veryHigh = Math.max(0, effort - 1.05);
+  const draft = draftingBonus(r);
+  const effectiveEffort = Math.max(0, effort - draft * 0.55);
+  const effectiveHigh = Math.max(0, effectiveEffort - 0.82);
+  const effectiveVeryHigh = Math.max(0, effectiveEffort - 1.05);
 
-  const pcrDrain = high * (sprint ? 0.085 : 0.045) + veryHigh * 0.028;
-  const pcrRecovery = effort < 0.68 ? 0.022 : effort < 0.80 ? 0.006 : 0;
+  const pcrDrain = effectiveHigh * (sprint ? 0.085 : 0.045) + effectiveVeryHigh * 0.028;
+  const pcrRecovery = effectiveEffort < 0.68 ? 0.022 : effectiveEffort < 0.80 ? 0.006 : 0;
   s.pcr = THREE.MathUtils.clamp(s.pcr - pcrDrain * dt + pcrRecovery * dt, 0, 1);
 
-  const glycogenDrain = race.event.distance >= 3000 ? (0.00022 + effort * 0.00016) : (0.000035 + effort * 0.000035);
+  const glycogenDrain = race.event.distance >= 3000 ? (0.00022 + effectiveEffort * 0.00016) : (0.000035 + effectiveEffort * 0.000035);
   s.glycogen = THREE.MathUtils.clamp(s.glycogen - glycogenDrain * dt, 0, 1);
 
   const threshold = 0.78 + fx.economy * 0.10;
-  const production = Math.max(0, effort - threshold) * (sprint ? 1.25 : 0.52);
-  const clearance = effort < 0.72 ? (0.20 + (0.72 - effort) * 0.45) : 0.025;
+  const production = Math.max(0, effectiveEffort - threshold) * (sprint ? 1.25 : 0.52);
+  const clearance = effectiveEffort < 0.72 ? (0.20 + (0.72 - effectiveEffort) * 0.45) : 0.025;
   s.lactate = THREE.MathUtils.clamp(s.lactate + (production - clearance) * dt, 1.0, 16.0);
 
-  const bufferProduction = Math.max(0, s.lactate - 6.5) * 0.005 + Math.max(0, effort - 1.02) * (0.070 - fx.buffer * 0.35);
-  const bufferRecovery = effort < 0.68 ? 0.018 : 0;
+  const bufferProduction = Math.max(0, s.lactate - 6.5) * 0.005 + Math.max(0, effectiveEffort - 1.02) * (0.070 - fx.buffer * 0.35);
+  const bufferRecovery = effectiveEffort < 0.68 ? 0.018 : 0;
   s.buffer = THREE.MathUtils.clamp(s.buffer + (bufferProduction - bufferRecovery) * dt, 0, 1);
 }
 
@@ -710,7 +690,6 @@ function aiEffort(r) {
 function updateLaneDynamics(r, dt) {
   const event = race.event;
   if (event.laneRules === 'lanes' || event.laneRules === 'straight-lanes') return;
-
   if (r.player) return;
 
   if (state.event === '800m' && state.startFormat === 'One-Turn Stagger') {
@@ -753,11 +732,7 @@ function updateRunner(r, dt) {
   updateScience(r, effort, dt);
 
   const s = r.science;
-  const fatigue = Math.max(0, s.buffer - 0.55) * 0.30
-    + Math.max(0, s.lactate - 10.0) * 0.014
-    + Math.max(0, 0.16 - s.pcr) * 0.22
-    + Math.max(0, 0.20 - s.glycogen) * 0.18;
-
+  const fatigue = Math.max(0, s.buffer - 0.55) * 0.30 + Math.max(0, s.lactate - 10.0) * 0.014 + Math.max(0, 0.16 - s.pcr) * 0.22 + Math.max(0, 0.20 - s.glycogen) * 0.18;
   const eventBaseSpeed = race.event.distance / race.event.baseTime;
   const baseSpeed = eventBaseSpeed * r.fitnessFactor;
   let paceFactor;
@@ -768,7 +743,7 @@ function updateRunner(r, dt) {
     paceFactor = 0.94 + effort * 0.075;
   }
 
-  let target = baseSpeed * paceFactor * (1 - fatigue);
+  let target = baseSpeed * paceFactor * (1 - fatigue) * (1 + draftingBonus(r));
   if (boxed(r)) target *= 0.975;
   if (r.contactPenalty > 0) target *= 0.90;
   r.speed = THREE.MathUtils.damp(r.speed, target, target > r.speed ? 3.2 : 2.15, dt);
@@ -794,7 +769,6 @@ function resolveContacts() {
       const gap = Math.abs(a.distance - b.distance);
       const laneGap = Math.abs(a.laneFloat - b.laneFloat);
       if (gap > 0.62 || laneGap > 0.43) continue;
-
       const rear = a.distance <= b.distance ? a : b;
       const front = rear === a ? b : a;
       if (rear.contactPenalty <= 0.03) {
@@ -1026,19 +1000,7 @@ function showSplit(text) {
 function updateCommentary() {
   const p = race.player;
   const leader = [...race.runners].sort((a, b) => b.distance - a.distance)[0];
-  commentary.update({
-    raceTime: race.time,
-    eventDistance: race.event.distance,
-    playerDistance: p.distance,
-    place: getPlace(p),
-    leaderDistance: leader.distance,
-    targetTime: race.targetTime,
-    split200: p.split200,
-    halfwaySplit: p.halfway,
-    isBoxed: boxed(p),
-    playerSpeed: p.speed,
-    leaderSpeed: leader.speed
-  });
+  commentary.update({ raceTime: race.time, eventDistance: race.event.distance, playerDistance: p.distance, place: getPlace(p), leaderDistance: leader.distance, targetTime: race.targetTime, split200: p.split200, halfwaySplit: p.halfway, isBoxed: boxed(p), playerSpeed: p.speed, leaderSpeed: leader.speed });
 }
 
 function handleRaceFrame(dt, elapsed) {
